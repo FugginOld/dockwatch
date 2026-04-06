@@ -209,6 +209,51 @@ func TestProcessFlagAliasesSchedAndInterval(t *testing.T) {
 	})
 }
 
+func TestProcessFlagAliasesCronAlias(t *testing.T) {
+	logrus.StandardLogger().ExitFunc = func(_ int) { t.FailNow() }
+	cmd := new(cobra.Command)
+	SetDefaults()
+	RegisterDockerFlags(cmd)
+	RegisterSystemFlags(cmd)
+
+	require.NoError(t, cmd.ParseFlags([]string{`--cron`, `@hourly`}))
+	flags := cmd.Flags()
+	ProcessFlagAliases(flags)
+
+	sched, _ := flags.GetString(`schedule`)
+	assert.Equal(t, `@hourly`, sched)
+}
+
+func TestProcessFlagAliasesCronAndScheduleConflict(t *testing.T) {
+	logrus.StandardLogger().ExitFunc = func(_ int) { panic(`FATAL`) }
+	cmd := new(cobra.Command)
+	SetDefaults()
+	RegisterDockerFlags(cmd)
+	RegisterSystemFlags(cmd)
+
+	require.NoError(t, cmd.ParseFlags([]string{`--cron`, `@hourly`, `--schedule`, `@daily`}))
+	flags := cmd.Flags()
+
+	assert.PanicsWithValue(t, `FATAL`, func() {
+		ProcessFlagAliases(flags)
+	})
+}
+
+func TestProcessFlagAliasesForceUpdateAlias(t *testing.T) {
+	logrus.StandardLogger().ExitFunc = func(_ int) { t.FailNow() }
+	cmd := new(cobra.Command)
+	SetDefaults()
+	RegisterDockerFlags(cmd)
+	RegisterSystemFlags(cmd)
+
+	require.NoError(t, cmd.ParseFlags([]string{`--force-update`}))
+	flags := cmd.Flags()
+	ProcessFlagAliases(flags)
+
+	runOnce, _ := flags.GetBool(`run-once`)
+	assert.Equal(t, true, runOnce)
+}
+
 func TestProcessFlagAliasesScheduleFromEnvironment(t *testing.T) {
 	cmd := new(cobra.Command)
 

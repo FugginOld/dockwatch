@@ -132,11 +132,16 @@ func PreRun(cmd *cobra.Command, _ []string) {
 func Run(c *cobra.Command, names []string) {
 	filter, filterDesc := filters.BuildFilter(names, disableContainers, enableLabel, scope)
 	runOnce, _ := c.PersistentFlags().GetBool("run-once")
+	forceUpdate, _ := c.PersistentFlags().GetBool("force-update")
 	enableUpdateAPI, _ := c.PersistentFlags().GetBool("http-api-update")
 	enableMetricsAPI, _ := c.PersistentFlags().GetBool("http-api-metrics")
 	unblockHTTPAPI, _ := c.PersistentFlags().GetBool("http-api-periodic-polls")
 	apiToken, _ := c.PersistentFlags().GetString("http-api-token")
 	healthCheck, _ := c.PersistentFlags().GetBool("health-check")
+
+	if forceUpdate {
+		runOnce = true
+	}
 
 	if healthCheck {
 		// health check should not have pid 1

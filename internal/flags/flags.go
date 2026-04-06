@@ -49,6 +49,12 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		envString("DOCKWATCH_SCHEDULE"),
 		"The cron expression which defines when to update")
 
+	flags.StringP(
+		"cron",
+		"",
+		"",
+		"Alias for --schedule")
+
 	flags.DurationP(
 		"stop-timeout",
 		"t",
@@ -127,6 +133,12 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"R",
 		envBool("DOCKWATCH_RUN_ONCE"),
 		"Run once now and exit")
+
+	flags.BoolP(
+		"force-update",
+		"",
+		false,
+		"Alias for --run-once; immediately check for updates and exit")
 
 	flags.BoolP(
 		"include-restarting",
@@ -413,8 +425,25 @@ func ProcessFlagAliases(flags *pflag.FlagSet) {
 		}
 	}
 
+	cronValue, err := flags.GetString(`cron`)
+	if err != nil {
+		log.Fatalf(`Failed to get flag: %v`, err)
+	}
+
 	scheduleChanged := flags.Changed(`schedule`)
 	intervalChanged := flags.Changed(`interval`)
+	cronChanged := flags.Changed(`cron`)
+	if cronChanged {
+		if scheduleChanged {
+			if schedule, _ := flags.GetString(`schedule`); schedule != cronValue {
+				log.Fatal(`Only schedule or cron can be defined, not both.`)
+			}
+		} else {
+			_ = flags.Set(`schedule`, cronValue)
+			scheduleChanged = true
+		}
+	}
+
 	// FIXME: snakeswap
 	// due to how viper is integrated by swapping the defaults for the flags, we need this hack:
 	if val, _ := flags.GetString(`schedule`); val != `` {
@@ -440,6 +469,10 @@ func ProcessFlagAliases(flags *pflag.FlagSet) {
 
 	if flagIsEnabled(flags, `trace`) {
 		_ = flags.Set(`log-level`, `trace`)
+	}
+
+	if flagIsEnabled(flags, `force-update`) {
+		_ = flags.Set(`run-once`, `true`)
 	}
 
 }

@@ -57,6 +57,12 @@ sudo systemctl enable --now docker
 
 Run Dockwatch with API-version auto-detection to avoid client/server mismatch errors:
 
+Optional interactive install with cron prompt:
+
+```bash
+./scripts/install-dockwatch.sh
+```
+
 ```bash
 docker rm -f dockwatch 2>/dev/null || true
 DW_API_VERSION=$(docker version --format '{{.Server.APIVersion}}')
@@ -66,7 +72,8 @@ docker run -d \
   --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e DOCKER_API_VERSION="${DW_API_VERSION}" \
-  fugginold/dockwatch:latest
+  fugginold/dockwatch:latest \
+  --schedule "@every 24h"
 ```
 
 Verify the installation:
@@ -84,6 +91,7 @@ services:
     image: fugginold/dockwatch:latest
     container_name: dockwatch
     restart: unless-stopped
+    command: --schedule "@every 24h"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
