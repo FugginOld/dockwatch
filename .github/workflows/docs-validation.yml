@@ -14,6 +14,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect changed markdown files
+        id: changed-markdown
+        uses: tj-actions/changed-files@v46
+        with:
+          files: |
+            **/*.md
+          separator: "\n"
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -30,15 +38,13 @@ jobs:
           mkdocs build --strict
 
       - name: Markdown lint
+        if: steps.changed-markdown.outputs.any_changed == 'true'
         uses: DavidAnson/markdownlint-cli2-action@v17
         with:
-          globs: |
-            README.md
-            CONTRIBUTING.md
-            SECURITY.md
-            docs/**/*.md
+          globs: ${{ steps.changed-markdown.outputs.all_changed_files }}
 
       - name: Offline markdown link check
+        if: steps.changed-markdown.outputs.any_changed == 'true'
         uses: lycheeverse/lychee-action@v2
         with:
           args: >-
@@ -46,7 +52,4 @@ jobs:
             --no-progress
             --offline
             --include-fragments
-            README.md
-            CONTRIBUTING.md
-            SECURITY.md
-            docs/**/*.md
+            ${{ steps.changed-markdown.outputs.all_changed_files }}
