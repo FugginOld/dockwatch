@@ -49,6 +49,33 @@ jobs:
           version: "2023.1.6"
           install-go: "false" # StaticCheck uses go v1.17 which does not support `any`
 
+  dependency-consistency:
+    name: Dependency Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.25.x
+      - name: Verify go.mod and go.sum are tidy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          go mod tidy
+
+          if ! git diff --exit-code -- go.mod go.sum; then
+            echo "::error::go.mod/go.sum are out of sync. Run 'go mod tidy' and commit the changes."
+            git --no-pager diff -- go.mod go.sum
+            exit 1
+          fi
+
+          echo "go.mod/go.sum are tidy."
+
   race:
     name: Race Detection
     runs-on: ubuntu-latest

@@ -9,13 +9,21 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    rebase-strategy: "auto"
 
   - package-ecosystem: "gomod" # See documentation for possible values
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    rebase-strategy: "auto"
+    open-pull-requests-limit: 3
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
       
   - package-ecosystem: "docker" # See documentation for possible values
     directory: "/dockerfiles" # Location of package manifests
     schedule:
       interval: "weekly"
+    rebase-strategy: "auto"
