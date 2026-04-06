@@ -41,12 +41,6 @@ func containerWithLabels(labels map[string]string) types.Container {
 	return mocks.CreateMockContainerWithConfig("cid1", "c1", "image:latest", true, false, time.Now(), config)
 }
 
-func runningContainerWithCommand(preUpdate string) types.Container {
-	return containerWithLabels(map[string]string{
-		preUpdateLabel: preUpdate,
-	})
-}
-
 // ExecutePreCheckCommand
 
 func TestExecutePreCheckCommand_NoCommand(t *testing.T) {
