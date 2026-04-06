@@ -1,0 +1,17 @@
+dockwatch
+dockwatch.exe
+vendor
+.glide
+dist
+.idea
+.DS_Store
+/site
+coverage.out
+*.coverprofile
+
+docs/assets/wasm_exec.js
+
+# Local development artifacts
+.venv-docs/
+*.tar.gz
+docs/assets/*.wasm

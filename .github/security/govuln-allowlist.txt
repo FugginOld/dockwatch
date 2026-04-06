@@ -1,0 +1,5 @@
+# Temporary allowlist for upstream vulnerabilities with no fixed version yet.
+# Keep this list minimal and remove entries as soon as fixes are published.
+
+GO-2026-4883
+GO-2026-4887
