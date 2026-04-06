@@ -10,6 +10,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// waitForEmpty polls m.QueueIsEmpty() until it returns true or a deadline is exceeded.
+func waitForEmpty(t *testing.T, m *metrics.Metrics) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if m.QueueIsEmpty() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	// Final check — will fail the test if still not empty
+	assert.True(t, m.QueueIsEmpty(), "metrics queue should be empty after draining")
+}
+
 // mockReport implements types.Report using prepared slices.
 type mockReport struct {
 	scanned []types.ContainerReport
@@ -66,8 +80,7 @@ func TestNewMetric_Empty(t *testing.T) {
 
 func TestMetrics_QueueIsEmpty_InitiallyEmpty(t *testing.T) {
 	m := metrics.Default()
-	// Drain any previously queued items
-	time.Sleep(50 * time.Millisecond)
+	waitForEmpty(t, m)
 	assert.True(t, m.QueueIsEmpty())
 }
 
@@ -75,8 +88,7 @@ func TestMetrics_Register_And_QueueIsEmpty(t *testing.T) {
 	m := metrics.Default()
 	metric := &metrics.Metric{Scanned: 5, Updated: 2, Failed: 1}
 	m.Register(metric)
-	// Give the consumer goroutine time to drain the channel
-	time.Sleep(100 * time.Millisecond)
+	waitForEmpty(t, m)
 	assert.True(t, m.QueueIsEmpty())
 }
 
@@ -85,7 +97,7 @@ func TestRegisterScan_NilMetric(t *testing.T) {
 	assert.NotPanics(t, func() {
 		metrics.RegisterScan(nil)
 	})
-	time.Sleep(100 * time.Millisecond)
+	waitForEmpty(t, metrics.Default())
 }
 
 func TestRegisterScan_ValidMetric(t *testing.T) {
@@ -93,7 +105,7 @@ func TestRegisterScan_ValidMetric(t *testing.T) {
 	assert.NotPanics(t, func() {
 		metrics.RegisterScan(m)
 	})
-	time.Sleep(100 * time.Millisecond)
+	waitForEmpty(t, metrics.Default())
 }
 
 func TestMetrics_Default_ReturnsSameInstance(t *testing.T) {

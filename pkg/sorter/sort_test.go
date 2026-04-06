@@ -1,7 +1,6 @@
 package sorter_test
 
 import (
-	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -171,10 +170,10 @@ func TestSortByDependencies_ChainedDependencies(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result, 3)
 
-	positions := make(map[string]int, 3)
+	positions := make(map[types.ContainerID]int, 3)
 	for i, c := range result {
-		positions[fmt.Sprintf("%s", c.ID())] = i
+		positions[c.ID()] = i
 	}
-	assert.Less(t, positions["id1"], positions["id2"], "c1 should come before c2")
-	assert.Less(t, positions["id2"], positions["id3"], "c2 should come before c3")
+	assert.Less(t, positions[types.ContainerID("id1")], positions[types.ContainerID("id2")], "c1 should come before c2")
+	assert.Less(t, positions[types.ContainerID("id2")], positions[types.ContainerID("id3")], "c2 should come before c3")
 }
