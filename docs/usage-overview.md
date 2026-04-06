@@ -1,4 +1,4 @@
-Dockwatch is packaged as a Docker container, so installation is as simple as pulling the `fugginold/dockwatch` image. If you are using an ARM-based architecture, pull the appropriate `fugginold/dockwatch:armhf-<tag>` image from [Docker Hub](https://hub.docker.com/r/fugginold/dockwatch/tags/).
+Dockwatch is packaged as a Docker container, so installation is as simple as pulling the `fugginold/dockwatch` image. If you are using an ARM-based architecture, pull the appropriate `fugginold/dockwatch:armhf-<tag>` image from [Docker Hub](https://hub.docker.com/repository/docker/fugginold/dockwatch/tags).
 
 Since the dockwatch code needs to interact with the Docker API in order to monitor the running containers, you need to mount _/var/run/docker.sock_ into the container with the `-v` flag when you run it.
 

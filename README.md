@@ -17,7 +17,7 @@
     <a href="https://github.com/fugginold/dockwatch/releases"><img alt="latest version" src="https://img.shields.io/github/tag/fugginold/dockwatch.svg"></a>
     <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="Apache-2.0 License" src="https://img.shields.io/github/license/fugginold/dockwatch.svg"></a>
     <a href="https://www.codacy.com/gh/fugginold/dockwatch/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=fugginold/dockwatch&amp;utm_campaign=Badge_Grade"><img alt="Codacy Badge" src="https://app.codacy.com/project/badge/Grade/1c48cfb7646d4009aa8c6f71287670b8"></a>
-    <a href="https://hub.docker.com/repository/docker/fugginold/dockwatch"><img alt="Pulls from DockerHub" src="https://img.shields.io/docker/pulls/fugginold/dockwatch.svg"></a>
+    <a href="https://hub.docker.com/repository/docker/fugginold/dockwatch/"><img alt="Pulls from DockerHub" src="https://img.shields.io/docker/pulls/fugginold/dockwatch.svg"></a>
   </p>
 
 </div>
