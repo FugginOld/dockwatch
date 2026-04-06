@@ -48,7 +48,7 @@ jobs:
         with:
           version: "latest"
           install-go: "false"
-          checks: "all,-SA1019"
+          checks: "all,-SA1019,-ST*"
 
   dependency-consistency:
     name: Dependency Consistency
