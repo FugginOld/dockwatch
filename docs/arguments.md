@@ -1,3 +1,5 @@
+# Arguments
+
 By default, dockwatch will monitor all containers running within the Docker daemon to which it is pointed (in most cases this
 will be the local Docker daemon, but you can override it with the `--host` option described in the next section). However, you
 can restrict dockwatch to monitoring a subset of the running containers by specifying the container names as arguments when
@@ -37,7 +39,8 @@ Some arguments can also reference a file, in which case the contents of the file
 This can be used to avoid putting secrets in the configuration file or command line.
 
 The following arguments are currently supported (including their corresponding `DOCKWATCH_` environment variables):
- - `http-api-token`
+
+- `http-api-token`
 
 ### Example docker-compose usage
 
@@ -114,7 +117,7 @@ Environment Variable: DOCKWATCH_REMOVE_VOLUMES
 Enable debug mode with verbose logging.
 
 !!! note "Notes"  
-   Alias for `--log-level debug`. See [Maximum log level](#maximum_log_level).  
+   Alias for `--log-level debug`. See [Maximum log level](#maximum-log-level).  
     Does _not_ take an argument when used as an argument. Using `--debug true` will **not** work.
 
 ```text
@@ -131,7 +134,7 @@ Environment Variable: DOCKWATCH_DEBUG
 Enable trace mode with very verbose logging. Caution: exposes credentials!
 
 !!! note "Notes"  
-   Alias for `--log-level trace`. See [Maximum log level](#maximum_log_level).  
+   Alias for `--log-level trace`. See [Maximum log level](#maximum-log-level).  
     Does _not_ take an argument when used as an argument. Using `--trace true` will **not** work.
 
 ```text
