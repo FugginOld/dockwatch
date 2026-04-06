@@ -11,3 +11,9 @@ Critical vulnerabilities that might open up for external attacks are best report
 We'll always try to get back to you as swiftly as possible, but keep in mind that since this is a community project, we can't really leave any guarantees about the speed.
 
 Non-critical vulnerabilities may be reported as regular GitHub issues.
+
+## Current Dependency Alerts
+
+Some dependency alerts may reference `github.com/docker/docker` or `github.com/moby/moby` vulnerabilities that affect Docker Engine daemon features such as AuthZ plugins or plugin installation flows.
+
+Dockwatch uses Docker client and API packages, but does not implement or ship the affected daemon functionality. For these alerts, remediation is typically to update the Docker Engine version on the host running Docker rather than to change Dockwatch application code.
