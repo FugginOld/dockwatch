@@ -3,96 +3,39 @@ package notifications
 import (
 	"os"
 	"strings"
-	"time"
 
 	ty "github.com/fugginold/dockwatch/pkg/types"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	log "github.com/sirupsen/logrus"
 )
+
+// LocalLog is used for logs that should never trigger notifications.
+var LocalLog = log.WithField("notify", "no")
 
 // NewNotifier creates and returns a new Notifier, using global configuration.
 func NewNotifier(c *cobra.Command) ty.Notifier {
 	f := c.Flags()
-
-	level, _ := f.GetString("notifications-level")
-	logLevel, err := log.ParseLevel(level)
-	if err != nil {
-		log.Fatalf("Notifications invalid log level: %s", err.Error())
+	configuredTypes, _ := f.GetStringSlice("notifications")
+	if len(configuredTypes) > 0 {
+		log.Warn("Notification delivery is disabled")
 	}
 
-	reportTemplate, _ := f.GetBool("notification-report")
-	stdout, _ := f.GetBool("notification-log-stdout")
-	tplString, _ := f.GetString("notification-template")
-	urls, _ := f.GetStringArray("notification-url")
-
-	data := GetTemplateData(c)
-	urls, delay := AppendLegacyUrls(urls, c)
-
-	return createNotifier(urls, logLevel, tplString, !reportTemplate, data, stdout, delay)
+	return &noopNotifier{}
 }
 
-// AppendLegacyUrls creates shoutrrr equivalent URLs from legacy notification flags
-func AppendLegacyUrls(urls []string, cmd *cobra.Command) ([]string, time.Duration) {
+type noopNotifier struct{}
 
-	// Parse types and create notifiers.
-	types, err := cmd.Flags().GetStringSlice("notifications")
-	if err != nil {
-		log.WithError(err).Fatal("could not read notifications argument")
-	}
+func (n *noopNotifier) StartNotification() {}
 
-	legacyDelay := time.Duration(0)
+func (n *noopNotifier) SendNotification(ty.Report) {}
 
-	for _, t := range types {
+func (n *noopNotifier) AddLogHook() {}
 
-		var legacyNotifier ty.ConvertibleNotifier
-		var err error
+func (n *noopNotifier) GetNames() []string { return []string{} }
 
-		switch t {
-		case emailType:
-			legacyNotifier = newEmailNotifier(cmd)
-		case slackType:
-			legacyNotifier = newSlackNotifier(cmd)
-		case msTeamsType:
-			legacyNotifier = newMsTeamsNotifier(cmd)
-		case gotifyType:
-			legacyNotifier = newGotifyNotifier(cmd)
-		case shoutrrrType:
-			continue
-		default:
-			log.Fatalf("Unknown notification type %q", t)
-			// Not really needed, used for nil checking static analysis
-			continue
-		}
+func (n *noopNotifier) GetURLs() []string { return []string{} }
 
-		shoutrrrURL, err := legacyNotifier.GetURL(cmd)
-		if err != nil {
-			log.Fatal("failed to create notification config: ", err)
-		}
-		urls = append(urls, shoutrrrURL)
-
-		if delayNotifier, ok := legacyNotifier.(ty.DelayNotifier); ok {
-			legacyDelay = delayNotifier.GetDelay()
-		}
-
-		log.WithField("URL", shoutrrrURL).Trace("created Shoutrrr URL from legacy notifier")
-	}
-
-	delay := GetDelay(cmd, legacyDelay)
-	return urls, delay
-}
-
-// GetDelay returns the legacy delay if defined, otherwise the delay as set by args is returned
-func GetDelay(c *cobra.Command, legacyDelay time.Duration) time.Duration {
-	if legacyDelay > 0 {
-		return legacyDelay
-	}
-
-	delay, _ := c.PersistentFlags().GetInt("notifications-delay")
-	if delay > 0 {
-		return time.Duration(delay) * time.Second
-	}
-	return time.Duration(0)
-}
+func (n *noopNotifier) Close() {}
 
 // GetTitle formats the title based on the passed hostname and tag
 func GetTitle(hostname string, tag string) string {
@@ -139,9 +82,3 @@ func GetTemplateData(c *cobra.Command) StaticData {
 		Title: title,
 	}
 }
-
-// ColorHex is the default notification color used for services that support it (formatted as a CSS hex string)
-const ColorHex = "#406170"
-
-// ColorInt is the default notification color used for services that support it (as an int value)
-const ColorInt = 0x406170

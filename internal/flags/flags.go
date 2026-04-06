@@ -226,7 +226,7 @@ func RegisterNotificationFlags(rootCmd *cobra.Command) {
 		"notifications",
 		"n",
 		envStringSlice("DOCKWATCH_NOTIFICATIONS"),
-		" Notification types to send (valid: email, slack, msteams, gotify, shoutrrr)")
+		" Notification types to send (valid: email, slack, msteams, gotify)")
 
 	flags.String(
 		"notifications-level",
@@ -360,16 +360,6 @@ Should only be used for testing.`)
 		envBool("DOCKWATCH_NOTIFICATION_GOTIFY_TLS_SKIP_VERIFY"),
 		`Controls whether dockwatch verifies the Gotify server's certificate chain and host name.
 Should only be used for testing.`)
-
-	flags.String(
-		"notification-template",
-		envString("DOCKWATCH_NOTIFICATION_TEMPLATE"),
-		"The shoutrrr text/template for the messages")
-
-	flags.StringArray(
-		"notification-url",
-		envStringSlice("DOCKWATCH_NOTIFICATION_URL"),
-		"The shoutrrr URL to send notifications to")
 
 	flags.Bool("notification-report",
 		envBool("DOCKWATCH_NOTIFICATION_REPORT"),
@@ -529,7 +519,6 @@ func GetSecretsFromFiles(rootCmd *cobra.Command) {
 		"notification-slack-hook-url",
 		"notification-msteams-hook",
 		"notification-gotify-token",
-		"notification-url",
 		"http-api-token",
 	}
 	for _, secret := range secrets {
@@ -604,13 +593,8 @@ func ProcessFlagAliases(flags *pflag.FlagSet) {
 		if porcelain != "v1" {
 			log.Fatalf(`Unknown porcelain version %q. Supported values: "v1"`, porcelain)
 		}
-		if err = appendFlagValue(flags, `notification-url`, `logger://`); err != nil {
-			log.Errorf(`Failed to set flag: %v`, err)
-		}
 		setFlagIfDefault(flags, `notification-log-stdout`, `true`)
 		setFlagIfDefault(flags, `notification-report`, `true`)
-		tpl := fmt.Sprintf(`porcelain.%s.summary-no-log`, porcelain)
-		setFlagIfDefault(flags, `notification-template`, tpl)
 	}
 
 	scheduleChanged := flags.Changed(`schedule`)

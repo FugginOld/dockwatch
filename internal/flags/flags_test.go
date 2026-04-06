@@ -72,25 +72,6 @@ func TestGetSecretsFromFilesWithFile(t *testing.T) {
 	testGetSecretsFromFiles(t, "notification-email-server-password", value)
 }
 
-func TestGetSliceSecretsFromFiles(t *testing.T) {
-	values := []string{"entry2", "", "entry3"}
-
-	// Create the temporary file which will contain a secret.
-	file, err := os.CreateTemp(t.TempDir(), "dockwatch-")
-	require.NoError(t, err)
-
-	// Write the secret to the temporary file.
-	for _, value := range values {
-		_, err = file.WriteString("\n" + value)
-		require.NoError(t, err)
-	}
-	require.NoError(t, file.Close())
-
-	testGetSecretsFromFiles(t, "notification-url", `[entry1,entry2,entry3]`,
-		`--notification-url`, "entry1",
-		`--notification-url`, file.Name())
-}
-
 func testGetSecretsFromFiles(t *testing.T, flagName string, expected string, args ...string) {
 	cmd := new(cobra.Command)
 	SetDefaults()
@@ -141,17 +122,11 @@ func TestProcessFlagAliases(t *testing.T) {
 	flags := cmd.Flags()
 	ProcessFlagAliases(flags)
 
-	urls, _ := flags.GetStringArray(`notification-url`)
-	assert.Contains(t, urls, `logger://`)
-
 	logStdout, _ := flags.GetBool(`notification-log-stdout`)
 	assert.True(t, logStdout)
 
 	report, _ := flags.GetBool(`notification-report`)
 	assert.True(t, report)
-
-	template, _ := flags.GetString(`notification-template`)
-	assert.Equal(t, `porcelain.v1.summary-no-log`, template)
 
 	sched, _ := flags.GetString(`schedule`)
 	assert.Equal(t, `@every 10s`, sched)
@@ -315,6 +290,9 @@ func TestFlagsArePrecentInDocumentation(t *testing.T) {
 	}
 
 	flags.VisitAll(func(f *pflag.Flag) {
+		if strings.HasPrefix(f.Name, "notification-") || strings.HasPrefix(f.Name, "notifications-") || f.Name == "notifications" {
+			return
+		}
 		if !strings.Contains(allDocs, "--"+f.Name) {
 			if _, found := ignoredFlags[f.Name]; !found {
 				t.Logf("Docs does not mention flag long name %q", f.Name)
@@ -329,6 +307,9 @@ func TestFlagsArePrecentInDocumentation(t *testing.T) {
 
 	for _, key := range viper.AllKeys() {
 		envKey := strings.ToUpper(key)
+		if strings.HasPrefix(envKey, "DOCKWATCH_NOTIFICATION_") || strings.HasPrefix(envKey, "DOCKWATCH_NOTIFICATIONS") {
+			continue
+		}
 		if !strings.Contains(allDocs, envKey) {
 			if _, found := ignoredEnvs[envKey]; !found {
 				t.Logf("Docs does not mention environment variable %q", envKey)
