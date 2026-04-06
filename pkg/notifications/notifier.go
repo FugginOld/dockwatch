@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	ty "github.com/fugginold/dockwatch/pkg/types"
-	"github.com/spf13/cobra"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -13,13 +12,7 @@ import (
 var LocalLog = log.WithField("notify", "no")
 
 // NewNotifier creates and returns a new Notifier, using global configuration.
-func NewNotifier(c *cobra.Command) ty.Notifier {
-	f := c.Flags()
-	configuredTypes, _ := f.GetStringSlice("notifications")
-	if len(configuredTypes) > 0 {
-		log.Warn("Notification delivery is disabled")
-	}
-
+func NewNotifier() ty.Notifier {
 	return &noopNotifier{}
 }
 
@@ -58,24 +51,10 @@ func GetTitle(hostname string, tag string) string {
 	return tb.String()
 }
 
-// GetTemplateData populates the static notification data from flags and environment
-func GetTemplateData(c *cobra.Command) StaticData {
-	f := c.PersistentFlags()
-
-	hostname, _ := f.GetString("notifications-hostname")
-	if hostname == "" {
-		hostname, _ = os.Hostname()
-	}
-
-	title := ""
-	if skip, _ := f.GetBool("notification-skip-title"); !skip {
-		tag, _ := f.GetString("notification-title-tag")
-		if tag == "" {
-			// For legacy email support
-			tag, _ = f.GetString("notification-email-subjecttag")
-		}
-		title = GetTitle(hostname, tag)
-	}
+// GetTemplateData populates static data used by preview templates.
+func GetTemplateData() StaticData {
+	hostname, _ := os.Hostname()
+	title := GetTitle(hostname, "")
 
 	return StaticData{
 		Host:  hostname,

@@ -218,173 +218,8 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"Label applied to containers take precedence over arguments")
 }
 
-// RegisterNotificationFlags that are used by dockwatch to send notifications
-func RegisterNotificationFlags(rootCmd *cobra.Command) {
-	flags := rootCmd.PersistentFlags()
-
-	flags.StringSliceP(
-		"notifications",
-		"n",
-		envStringSlice("DOCKWATCH_NOTIFICATIONS"),
-		" Notification types to send (valid: email, slack, msteams, gotify)")
-
-	flags.String(
-		"notifications-level",
-		envString("DOCKWATCH_NOTIFICATIONS_LEVEL"),
-		"The log level used for sending notifications. Possible values: panic, fatal, error, warn, info or debug")
-
-	flags.IntP(
-		"notifications-delay",
-		"",
-		envInt("DOCKWATCH_NOTIFICATIONS_DELAY"),
-		"Delay before sending notifications, expressed in seconds")
-
-	flags.StringP(
-		"notifications-hostname",
-		"",
-		envString("DOCKWATCH_NOTIFICATIONS_HOSTNAME"),
-		"Custom hostname for notification titles")
-
-	flags.StringP(
-		"notification-email-from",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_EMAIL_FROM"),
-		"Address to send notification emails from")
-
-	flags.StringP(
-		"notification-email-to",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_EMAIL_TO"),
-		"Address to send notification emails to")
-
-	flags.IntP(
-		"notification-email-delay",
-		"",
-		envInt("DOCKWATCH_NOTIFICATION_EMAIL_DELAY"),
-		"Delay before sending notifications, expressed in seconds")
-
-	flags.StringP(
-		"notification-email-server",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_EMAIL_SERVER"),
-		"SMTP server to send notification emails through")
-
-	flags.IntP(
-		"notification-email-server-port",
-		"",
-		envInt("DOCKWATCH_NOTIFICATION_EMAIL_SERVER_PORT"),
-		"SMTP server port to send notification emails through")
-
-	flags.BoolP(
-		"notification-email-server-tls-skip-verify",
-		"",
-		envBool("DOCKWATCH_NOTIFICATION_EMAIL_SERVER_TLS_SKIP_VERIFY"),
-		`Controls whether dockwatch verifies the SMTP server's certificate chain and host name.
-Should only be used for testing.`)
-
-	flags.StringP(
-		"notification-email-server-user",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_EMAIL_SERVER_USER"),
-		"SMTP server user for sending notifications")
-
-	flags.StringP(
-		"notification-email-server-password",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_EMAIL_SERVER_PASSWORD"),
-		"SMTP server password for sending notifications")
-
-	flags.StringP(
-		"notification-email-subjecttag",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_EMAIL_SUBJECTTAG"),
-		"Subject prefix tag for notifications via mail")
-
-	flags.StringP(
-		"notification-slack-hook-url",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_SLACK_HOOK_URL"),
-		"The Slack Hook URL to send notifications to")
-
-	flags.StringP(
-		"notification-slack-identifier",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_SLACK_IDENTIFIER"),
-		"A string which will be used to identify the messages coming from this dockwatch instance")
-
-	flags.StringP(
-		"notification-slack-channel",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_SLACK_CHANNEL"),
-		"A string which overrides the webhook's default channel. Example: #my-custom-channel")
-
-	flags.StringP(
-		"notification-slack-icon-emoji",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_SLACK_ICON_EMOJI"),
-		"An emoji code string to use in place of the default icon")
-
-	flags.StringP(
-		"notification-slack-icon-url",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_SLACK_ICON_URL"),
-		"An icon image URL string to use in place of the default icon")
-
-	flags.StringP(
-		"notification-msteams-hook",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_MSTEAMS_HOOK_URL"),
-		"The MSTeams WebHook URL to send notifications to")
-
-	flags.BoolP(
-		"notification-msteams-data",
-		"",
-		envBool("DOCKWATCH_NOTIFICATION_MSTEAMS_USE_LOG_DATA"),
-		"The MSTeams notifier will try to extract log entry fields as MSTeams message facts")
-
-	flags.StringP(
-		"notification-gotify-url",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_GOTIFY_URL"),
-		"The Gotify URL to send notifications to")
-
-	flags.StringP(
-		"notification-gotify-token",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_GOTIFY_TOKEN"),
-		"The Gotify Application required to query the Gotify API")
-
-	flags.BoolP(
-		"notification-gotify-tls-skip-verify",
-		"",
-		envBool("DOCKWATCH_NOTIFICATION_GOTIFY_TLS_SKIP_VERIFY"),
-		`Controls whether dockwatch verifies the Gotify server's certificate chain and host name.
-Should only be used for testing.`)
-
-	flags.Bool("notification-report",
-		envBool("DOCKWATCH_NOTIFICATION_REPORT"),
-		"Use the session report as the notification template data")
-
-	flags.StringP(
-		"notification-title-tag",
-		"",
-		envString("DOCKWATCH_NOTIFICATION_TITLE_TAG"),
-		"Title prefix tag for notifications")
-
-	flags.Bool("notification-skip-title",
-		envBool("DOCKWATCH_NOTIFICATION_SKIP_TITLE"),
-		"Do not pass the title param to notifications")
-
-	flags.String(
-		"warn-on-head-failure",
-		envString("DOCKWATCH_WARN_ON_HEAD_FAILURE"),
-		"When to warn about HEAD pull requests failing. Possible values: always, auto or never")
-
-	flags.Bool(
-		"notification-log-stdout",
-		envBool("DOCKWATCH_NOTIFICATION_LOG_STDOUT"),
-		"Write notification logs to stdout instead of logging (to stderr)")
-}
+// RegisterNotificationFlags is kept as a no-op for source compatibility.
+func RegisterNotificationFlags(_ *cobra.Command) {}
 
 func envString(key string) string {
 	viper.MustBindEnv(key)
@@ -418,11 +253,6 @@ func SetDefaults() {
 	viper.SetDefault("DOCKER_API_VERSION", DockerAPIMinVersion)
 	viper.SetDefault("DOCKWATCH_POLL_INTERVAL", defaultInterval)
 	viper.SetDefault("DOCKWATCH_TIMEOUT", time.Second*10)
-	viper.SetDefault("DOCKWATCH_NOTIFICATIONS", []string{})
-	viper.SetDefault("DOCKWATCH_NOTIFICATIONS_LEVEL", "info")
-	viper.SetDefault("DOCKWATCH_NOTIFICATION_EMAIL_SERVER_PORT", 25)
-	viper.SetDefault("DOCKWATCH_NOTIFICATION_EMAIL_SUBJECTTAG", "")
-	viper.SetDefault("DOCKWATCH_NOTIFICATION_SLACK_IDENTIFIER", "dockwatch")
 	viper.SetDefault("DOCKWATCH_LOG_LEVEL", "info")
 	viper.SetDefault("DOCKWATCH_LOG_FORMAT", "auto")
 }
@@ -515,10 +345,6 @@ func GetSecretsFromFiles(rootCmd *cobra.Command) {
 	flags := rootCmd.PersistentFlags()
 
 	secrets := []string{
-		"notification-email-server-password",
-		"notification-slack-hook-url",
-		"notification-msteams-hook",
-		"notification-gotify-token",
 		"http-api-token",
 	}
 	for _, secret := range secrets {
@@ -593,8 +419,6 @@ func ProcessFlagAliases(flags *pflag.FlagSet) {
 		if porcelain != "v1" {
 			log.Fatalf(`Unknown porcelain version %q. Supported values: "v1"`, porcelain)
 		}
-		setFlagIfDefault(flags, `notification-log-stdout`, `true`)
-		setFlagIfDefault(flags, `notification-report`, `true`)
 	}
 
 	scheduleChanged := flags.Changed(`schedule`)

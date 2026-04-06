@@ -66,7 +66,6 @@ func init() {
 	flags.SetDefaults()
 	flags.RegisterDockerFlags(rootCmd)
 	flags.RegisterSystemFlags(rootCmd)
-	flags.RegisterNotificationFlags(rootCmd)
 }
 
 // Execute the root func and exit in case of errors
@@ -129,7 +128,7 @@ func PreRun(cmd *cobra.Command, _ []string) {
 		WarnOnHeadFailed:  container.WarningStrategy(warnOnHeadPullFailed),
 	})
 
-	notifier = notifications.NewNotifier(cmd)
+	notifier = notifications.NewNotifier()
 	notifier.AddLogHook()
 }
 

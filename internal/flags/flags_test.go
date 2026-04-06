@@ -50,9 +50,9 @@ func TestEnvConfig_Custom(t *testing.T) {
 
 func TestGetSecretsFromFilesWithString(t *testing.T) {
 	value := "supersecretstring"
-	t.Setenv("DOCKWATCH_NOTIFICATION_EMAIL_SERVER_PASSWORD", value)
+	t.Setenv("DOCKWATCH_HTTP_API_TOKEN", value)
 
-	testGetSecretsFromFiles(t, "notification-email-server-password", value)
+	testGetSecretsFromFiles(t, "http-api-token", value)
 }
 
 func TestGetSecretsFromFilesWithFile(t *testing.T) {
@@ -67,16 +67,15 @@ func TestGetSecretsFromFilesWithFile(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, file.Close())
 
-	t.Setenv("DOCKWATCH_NOTIFICATION_EMAIL_SERVER_PASSWORD", file.Name())
+	t.Setenv("DOCKWATCH_HTTP_API_TOKEN", file.Name())
 
-	testGetSecretsFromFiles(t, "notification-email-server-password", value)
+	testGetSecretsFromFiles(t, "http-api-token", value)
 }
 
 func testGetSecretsFromFiles(t *testing.T, flagName string, expected string, args ...string) {
 	cmd := new(cobra.Command)
 	SetDefaults()
 	RegisterSystemFlags(cmd)
-	RegisterNotificationFlags(cmd)
 	require.NoError(t, cmd.ParseFlags(args))
 	GetSecretsFromFiles(cmd)
 	flag := cmd.PersistentFlags().Lookup(flagName)
@@ -112,7 +111,6 @@ func TestProcessFlagAliases(t *testing.T) {
 	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
-	RegisterNotificationFlags(cmd)
 
 	require.NoError(t, cmd.ParseFlags([]string{
 		`--porcelain`, `v1`,
@@ -121,12 +119,6 @@ func TestProcessFlagAliases(t *testing.T) {
 	}))
 	flags := cmd.Flags()
 	ProcessFlagAliases(flags)
-
-	logStdout, _ := flags.GetBool(`notification-log-stdout`)
-	assert.True(t, logStdout)
-
-	report, _ := flags.GetBool(`notification-report`)
-	assert.True(t, report)
 
 	sched, _ := flags.GetString(`schedule`)
 	assert.Equal(t, `@every 10s`, sched)
@@ -142,7 +134,6 @@ func TestProcessFlagAliasesLogLevelFromEnvironment(t *testing.T) {
 	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
-	RegisterNotificationFlags(cmd)
 
 	require.NoError(t, cmd.ParseFlags([]string{}))
 	flags := cmd.Flags()
@@ -209,7 +200,6 @@ func TestProcessFlagAliasesSchedAndInterval(t *testing.T) {
 	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
-	RegisterNotificationFlags(cmd)
 
 	require.NoError(t, cmd.ParseFlags([]string{`--schedule`, `@hourly`, `--interval`, `10`}))
 	flags := cmd.Flags()
@@ -227,7 +217,6 @@ func TestProcessFlagAliasesScheduleFromEnvironment(t *testing.T) {
 	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
-	RegisterNotificationFlags(cmd)
 
 	require.NoError(t, cmd.ParseFlags([]string{}))
 	flags := cmd.Flags()
@@ -243,7 +232,6 @@ func TestProcessFlagAliasesInvalidPorcelaineVersion(t *testing.T) {
 	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
-	RegisterNotificationFlags(cmd)
 
 	require.NoError(t, cmd.ParseFlags([]string{`--porcelain`, `cowboy`}))
 	flags := cmd.Flags()
@@ -255,23 +243,10 @@ func TestProcessFlagAliasesInvalidPorcelaineVersion(t *testing.T) {
 
 func TestFlagsArePrecentInDocumentation(t *testing.T) {
 
-	// Legacy notifcations are ignored, since they are (soft) deprecated
-	ignoredEnvs := map[string]string{
-		"DOCKWATCH_NOTIFICATION_SLACK_ICON_EMOJI": "legacy",
-		"DOCKWATCH_NOTIFICATION_SLACK_ICON_URL":   "legacy",
-	}
-
-	ignoredFlags := map[string]string{
-		"notification-gotify-url":       "legacy",
-		"notification-slack-icon-emoji": "legacy",
-		"notification-slack-icon-url":   "legacy",
-	}
-
 	cmd := new(cobra.Command)
 	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
-	RegisterNotificationFlags(cmd)
 
 	flags := cmd.PersistentFlags()
 
@@ -290,14 +265,9 @@ func TestFlagsArePrecentInDocumentation(t *testing.T) {
 	}
 
 	flags.VisitAll(func(f *pflag.Flag) {
-		if strings.HasPrefix(f.Name, "notification-") || strings.HasPrefix(f.Name, "notifications-") || f.Name == "notifications" {
-			return
-		}
 		if !strings.Contains(allDocs, "--"+f.Name) {
-			if _, found := ignoredFlags[f.Name]; !found {
-				t.Logf("Docs does not mention flag long name %q", f.Name)
-				t.Fail()
-			}
+			t.Logf("Docs does not mention flag long name %q", f.Name)
+			t.Fail()
 		}
 		if !strings.Contains(allDocs, "-"+f.Shorthand) {
 			t.Logf("Docs does not mention flag shorthand %q (%q)", f.Shorthand, f.Name)
@@ -307,14 +277,9 @@ func TestFlagsArePrecentInDocumentation(t *testing.T) {
 
 	for _, key := range viper.AllKeys() {
 		envKey := strings.ToUpper(key)
-		if strings.HasPrefix(envKey, "DOCKWATCH_NOTIFICATION_") || strings.HasPrefix(envKey, "DOCKWATCH_NOTIFICATIONS") {
-			continue
-		}
 		if !strings.Contains(allDocs, envKey) {
-			if _, found := ignoredEnvs[envKey]; !found {
-				t.Logf("Docs does not mention environment variable %q", envKey)
-				t.Fail()
-			}
+			t.Logf("Docs does not mention environment variable %q", envKey)
+			t.Fail()
 		}
 	}
 }
