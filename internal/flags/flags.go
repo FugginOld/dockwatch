@@ -226,11 +226,6 @@ func envString(key string) string {
 	return viper.GetString(key)
 }
 
-func envStringSlice(key string) []string {
-	viper.MustBindEnv(key)
-	return viper.GetStringSlice(key)
-}
-
 func envInt(key string) int {
 	viper.MustBindEnv(key)
 	return viper.GetInt(key)
@@ -498,30 +493,4 @@ func flagIsEnabled(flags *pflag.FlagSet, name string) bool {
 		log.Fatalf(`The flag %q is not defined`, name)
 	}
 	return value
-}
-
-func appendFlagValue(flags *pflag.FlagSet, name string, values ...string) error {
-	flag := flags.Lookup(name)
-	if flag == nil {
-		return fmt.Errorf(`invalid flag name %q`, name)
-	}
-
-	if flagValues, ok := flag.Value.(pflag.SliceValue); ok {
-		for _, value := range values {
-			_ = flagValues.Append(value)
-		}
-	} else {
-		return fmt.Errorf(`the value for flag %q is not a slice value`, name)
-	}
-
-	return nil
-}
-
-func setFlagIfDefault(flags *pflag.FlagSet, name string, value string) {
-	if flags.Changed(name) {
-		return
-	}
-	if err := flags.Set(name, value); err != nil {
-		log.Errorf(`Failed to set flag: %v`, err)
-	}
 }
