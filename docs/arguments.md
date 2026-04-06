@@ -385,7 +385,7 @@ See [With label taking precedence over arguments](#with-label-taking-precedence-
 
 ## Without sending a startup message
 
-Do not send a message after dockwatch started. Otherwise there will be an info-level notification.
+Do not send a startup message after dockwatch started.
 
 ```text
 
@@ -524,8 +524,7 @@ Environment Variable: DOCKWATCH_TIMEOUT
 
 ## TLS Verification
 
-Use TLS when connecting to the Docker socket and verify the server's certificate. See below for options used to
-configure notifications.
+Use TLS when connecting to the Docker socket and verify the server's certificate.
 
 ```text
 

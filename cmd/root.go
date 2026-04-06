@@ -20,7 +20,6 @@ import (
 	"github.com/fugginold/dockwatch/pkg/container"
 	"github.com/fugginold/dockwatch/pkg/filters"
 	"github.com/fugginold/dockwatch/pkg/metrics"
-	"github.com/fugginold/dockwatch/pkg/notifications"
 	t "github.com/fugginold/dockwatch/pkg/types"
 	"github.com/robfig/cron"
 	log "github.com/sirupsen/logrus"
@@ -37,7 +36,6 @@ var (
 	monitorOnly       bool
 	enableLabel       bool
 	disableContainers []string
-	notifier          t.Notifier
 	timeout           time.Duration
 	lifecycleHooks    bool
 	rollingRestart    bool
@@ -128,8 +126,6 @@ func PreRun(cmd *cobra.Command, _ []string) {
 		WarnOnHeadFailed:  container.WarningStrategy(warnOnHeadPullFailed),
 	})
 
-	notifier = notifications.NewNotifier()
-	notifier.AddLogHook()
 }
 
 // Run is the main execution flow of the command
@@ -163,8 +159,7 @@ func Run(c *cobra.Command, names []string) {
 
 	if runOnce {
 		writeStartupMessage(c, time.Time{}, filterDesc)
-		runUpdatesWithNotifications(filter)
-		notifier.Close()
+		runUpdates(filter)
 		os.Exit(0)
 		return
 	}
@@ -181,7 +176,7 @@ func Run(c *cobra.Command, names []string) {
 
 	if enableUpdateAPI {
 		updateHandler := update.New(func(images []string) {
-			metric := runUpdatesWithNotifications(filters.FilterByImage(images, filter))
+			metric := runUpdates(filters.FilterByImage(images, filter))
 			metrics.RegisterScan(metric)
 		}, updateLock)
 		httpAPI.RegisterFunc(updateHandler.Path, updateHandler.Handle)
@@ -210,7 +205,6 @@ func Run(c *cobra.Command, names []string) {
 
 func logNotifyExit(err error) {
 	log.Error(err)
-	notifier.Close()
 	os.Exit(1)
 }
 
@@ -262,48 +256,29 @@ func writeStartupMessage(c *cobra.Command, sched time.Time, filtering string) {
 	noStartupMessage, _ := c.PersistentFlags().GetBool("no-startup-message")
 	enableUpdateAPI, _ := c.PersistentFlags().GetBool("http-api-update")
 
-	var startupLog *log.Entry
-	if noStartupMessage {
-		startupLog = notifications.LocalLog
-	} else {
-		startupLog = log.NewEntry(log.StandardLogger())
-		// Batch up startup messages to send them as a single notification
-		notifier.StartNotification()
-	}
-
-	startupLog.Info("Dockwatch ", meta.Version)
-
-	notifierNames := notifier.GetNames()
-	if len(notifierNames) > 0 {
-		startupLog.Info("Using notifications: " + strings.Join(notifierNames, ", "))
-	} else {
-		startupLog.Info("Using no notifications")
-	}
-
-	startupLog.Info(filtering)
-
-	if !sched.IsZero() {
-		until := formatDuration(time.Until(sched))
-		startupLog.Info("Scheduling first run: " + sched.Format("2006-01-02 15:04:05 -0700 MST"))
-		startupLog.Info("Note that the first check will be performed in " + until)
-	} else if runOnce, _ := c.PersistentFlags().GetBool("run-once"); runOnce {
-		startupLog.Info("Running a one time update.")
-	} else {
-		startupLog.Info("Periodic runs are not enabled.")
-	}
-
-	if enableUpdateAPI {
-		// TODO: make listen port configurable
-		startupLog.Info("The HTTP API is enabled at :8080.")
-	}
-
 	if !noStartupMessage {
-		// Send the queued up startup messages, not including the trace warning below (to make sure it's noticed)
-		notifier.SendNotification(nil)
+		startupLog := log.NewEntry(log.StandardLogger())
+		startupLog.Info("Dockwatch ", meta.Version)
+		startupLog.Info(filtering)
+
+		if !sched.IsZero() {
+			until := formatDuration(time.Until(sched))
+			startupLog.Info("Scheduling first run: " + sched.Format("2006-01-02 15:04:05 -0700 MST"))
+			startupLog.Info("Note that the first check will be performed in " + until)
+		} else if runOnce, _ := c.PersistentFlags().GetBool("run-once"); runOnce {
+			startupLog.Info("Running a one time update.")
+		} else {
+			startupLog.Info("Periodic runs are not enabled.")
+		}
+
+		if enableUpdateAPI {
+			// TODO: make listen port configurable
+			startupLog.Info("The HTTP API is enabled at :8080.")
+		}
 	}
 
 	if log.IsLevelEnabled(log.TraceLevel) {
-		startupLog.Warn("Trace level enabled: log will include sensitive information as credentials and tokens")
+		log.Warn("Trace level enabled: log will include sensitive information as credentials and tokens")
 	}
 }
 
@@ -320,7 +295,7 @@ func runUpgradesOnSchedule(c *cobra.Command, filter t.Filter, filtering string, 
 			select {
 			case v := <-lock:
 				defer func() { lock <- v }()
-				metric := runUpdatesWithNotifications(filter)
+				metric := runUpdates(filter)
 				metrics.RegisterScan(metric)
 			default:
 				// Update was skipped
@@ -354,8 +329,7 @@ func runUpgradesOnSchedule(c *cobra.Command, filter t.Filter, filtering string, 
 	return nil
 }
 
-func runUpdatesWithNotifications(filter t.Filter) *metrics.Metric {
-	notifier.StartNotification()
+func runUpdates(filter t.Filter) *metrics.Metric {
 	updateParams := t.UpdateParams{
 		Filter:          filter,
 		Cleanup:         cleanup,
@@ -371,9 +345,8 @@ func runUpdatesWithNotifications(filter t.Filter) *metrics.Metric {
 	if err != nil {
 		log.Error(err)
 	}
-	notifier.SendNotification(result)
 	metricResults := metrics.NewMetric(result)
-	notifications.LocalLog.WithFields(log.Fields{
+	log.WithFields(log.Fields{
 		"Scanned": metricResults.Scanned,
 		"Updated": metricResults.Updated,
 		"Failed":  metricResults.Failed,

@@ -218,9 +218,6 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"Label applied to containers take precedence over arguments")
 }
 
-// RegisterNotificationFlags is kept as a no-op for source compatibility.
-func RegisterNotificationFlags(_ *cobra.Command) {}
-
 func envString(key string) string {
 	viper.MustBindEnv(key)
 	return viper.GetString(key)

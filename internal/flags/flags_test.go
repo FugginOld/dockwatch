@@ -253,7 +253,6 @@ func TestFlagsArePrecentInDocumentation(t *testing.T) {
 	docFiles := []string{
 		"../../docs/arguments.md",
 		"../../docs/lifecycle-hooks.md",
-		"../../docs/notifications.md",
 	}
 	allDocs := ""
 	for _, f := range docFiles {
