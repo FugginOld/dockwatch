@@ -7,24 +7,29 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 IMAGE="${IMAGE:-fugginold/dockwatch}"
 VERSION_TAG=""
 PUSH_LATEST=1
+NO_CACHE=0
+USE_LEGACY_BUILDER=0
 
 usage() {
   cat <<'EOF'
 Build and push Dockwatch Docker images to Docker Hub.
 
 Usage:
-  ./scripts/push-dockerhub.sh [--tag <version>] [--image <repo/name>] [--no-latest]
+  ./scripts/push-dockerhub.sh [--tag <version>] [--image <repo/name>] [--no-latest] [--no-cache] [--legacy-builder]
 
 Options:
   --tag <version>     Also push an explicit version tag (example: 0.1.1).
   --image <repo/name> Override image name (default: fugginold/dockwatch).
   --no-latest         Do not push the latest tag.
+  --no-cache          Build without using Docker layer cache.
+  --legacy-builder    Disable BuildKit for this build.
   -h, --help          Show this help message.
 
 Examples:
   ./scripts/push-dockerhub.sh
   ./scripts/push-dockerhub.sh --tag 0.1.1
   ./scripts/push-dockerhub.sh --image myuser/dockwatch --tag 0.1.1
+  ./scripts/push-dockerhub.sh --legacy-builder --no-cache --tag 0.1.1
 EOF
 }
 
@@ -42,6 +47,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-latest)
       PUSH_LATEST=0
+      shift
+      ;;
+    --no-cache)
+      NO_CACHE=1
+      shift
+      ;;
+    --legacy-builder)
+      USE_LEGACY_BUILDER=1
       shift
       ;;
     -h|--help)
@@ -73,8 +86,18 @@ fi
 
 cd "$REPO_ROOT"
 
+build_args=(-f dockerfiles/Dockerfile.dev-self-contained -t "${IMAGE}:latest")
+if [[ "$NO_CACHE" -eq 1 ]]; then
+  build_args+=(--no-cache)
+fi
+build_args+=(.)
+
 echo "Building image ${IMAGE}:latest using dockerfiles/Dockerfile.dev-self-contained..."
-docker build -f dockerfiles/Dockerfile.dev-self-contained -t "${IMAGE}:latest" .
+if [[ "$USE_LEGACY_BUILDER" -eq 1 ]]; then
+  DOCKER_BUILDKIT=0 docker build "${build_args[@]}"
+else
+  docker build "${build_args[@]}"
+fi
 
 if [[ -n "$VERSION_TAG" ]]; then
   echo "Tagging image ${IMAGE}:${VERSION_TAG}..."
