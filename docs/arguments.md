@@ -187,7 +187,7 @@ Environment Variable: NO_COLOR
 
 ## Docker host
 
-Docker daemon socket to connect to. Can be pointed at a remote Docker host by specifying a TCP endpoint as "tcp://hostname:port".
+Docker daemon socket to connect to. Can be pointed at a remote Docker host by specifying a TCP endpoint as `tcp://hostname:port`.
 
 ```text
 
