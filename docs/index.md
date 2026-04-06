@@ -29,9 +29,6 @@
   <a href="https://www.codacy.com/gh/fugginold/dockwatch/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=fugginold/dockwatch&amp;utm_campaign=Badge_Grade">
     <img alt="Codacy Badge" src="https://app.codacy.com/project/badge/Grade/1c48cfb7646d4009aa8c6f71287670b8"/>
   </a>
-  <a href="https://github.com/fugginold/dockwatch/#contributors">
-    <img alt="All Contributors" src="https://img.shields.io/github/all-contributors/fugginold/dockwatch" />
-  </a>
   <a href="https://hub.docker.com/r/fugginold/dockwatch">
     <img alt="Pulls from DockerHub" src="https://img.shields.io/docker/pulls/fugginold/dockwatch.svg" />
   </a>
