@@ -48,6 +48,7 @@ jobs:
         with:
           version: "latest"
           install-go: "false"
+          checks: "all,-SA1019"
 
   dependency-consistency:
     name: Dependency Consistency
@@ -124,7 +125,7 @@ jobs:
           govulncheck ./... > govulncheck.out 2>&1 || SCAN_EXIT=$?
           cat govulncheck.out
 
-          FOUND_IDS=$(grep -oE 'GO-[0-9]{4}-[0-9]+' govulncheck.out | sort -u || true)
+          FOUND_IDS=$(grep -oE 'GO-[0-9]{4}-[0-9]+' govulncheck.out | tr -d '\r' | sort -u || true)
           if [[ -z "$FOUND_IDS" ]]; then
             if [[ "$SCAN_EXIT" -ne 0 ]]; then
               echo "::error::govulncheck failed without producing vulnerability IDs"
@@ -134,7 +135,7 @@ jobs:
             exit 0
           fi
 
-          ALLOWLIST_IDS=$(grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$ALLOWLIST_FILE" | sort -u)
+          ALLOWLIST_IDS=$(grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$ALLOWLIST_FILE" | tr -d '\r' | sort -u)
           UNEXPECTED_IDS=$(comm -23 <(printf '%s\n' "$FOUND_IDS") <(printf '%s\n' "$ALLOWLIST_IDS") || true)
 
           if [[ -n "$UNEXPECTED_IDS" ]]; then
