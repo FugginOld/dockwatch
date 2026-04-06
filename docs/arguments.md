@@ -33,11 +33,6 @@ Some arguments can also reference a file, in which case the contents of the file
 This can be used to avoid putting secrets in the configuration file or command line.
 
 The following arguments are currently supported (including their corresponding `DOCKWATCH_` environment variables):
- - `notification-url`
- - `notification-email-server-password`
- - `notification-slack-hook-url`
- - `notification-msteams-hook`
- - `notification-gotify-token`
  - `http-api-token`
 
 ### Example docker-compose usage
@@ -254,7 +249,7 @@ Environment Variable: DOCKWATCH_DISABLE_CONTAINERS
 ```
 
 ## Without updating containers
-Will only monitor for new images, send notifications and invoke
+Will only monitor for new images and invoke
 the [pre-check/post-check hooks](https://containrrr.dev/dockwatch/lifecycle-hooks/), but will __not__ update the
 containers.
 
@@ -461,15 +456,6 @@ Returns a success exit code to enable usage with docker `HEALTHCHECK`. This chec
 ## Programatic Output (porcelain)
 
 Writes the session results to STDOUT using a stable, machine-readable format (indicated by the argument VERSION).  
-  
-Alias for:
-
-```text
-		--notification-url logger://
-		--notification-log-stdout
-		--notification-report
-		--notification-template porcelain.VERSION.summary-no-log
-
             Argument: --porcelain, -P
 Environment Variable: DOCKWATCH_PORCELAIN
      Possible values: v1
