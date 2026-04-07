@@ -7,7 +7,8 @@ As the software by default is set to auto-update if you use the `latest` tag, yo
 
 ## Reporting a Vulnerability
 
-All security vulnerabilities, including critical ones, should be reported by opening an issue in the [GitHub repository issues section](https://github.com/FugginOld/dockwatch/issues).
+Please report suspected security vulnerabilities privately using GitHub's **Report a vulnerability** flow / Security Advisories for this repository rather than opening a public issue.
+If you need to discuss a security matter publicly, please only use the [GitHub repository issues section](https://github.com/FugginOld/dockwatch/issues) for non-sensitive follow-up after a fix has been released or for reports that do not include exploit details.
 We'll always try to get back to you as swiftly as possible, but keep in mind that since this is a community project, we can't really leave any guarantees about the speed.
 
 ## Current Dependency Alerts
