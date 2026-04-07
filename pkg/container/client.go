@@ -296,7 +296,7 @@ func (client dockerClient) StartContainer(c t.Container) (t.ContainerID, error) 
 
 	log.Debugf("Starting container %s (%s)", name, createdContainerID.ShortID())
 	if err := client.api.ContainerStart(bg, createdContainer.ID, container.StartOptions{}); err != nil {
-		return "", err
+		return createdContainerID, err
 	}
 	return createdContainerID, nil
 

@@ -19,12 +19,12 @@ func (c ByCreated) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
 func (c ByCreated) Less(i, j int) bool {
 	t1, err := time.Parse(time.RFC3339Nano, c[i].ContainerInfo().Created)
 	if err != nil {
-		t1 = time.Now()
+		t1 = time.Time{}
 	}
 
 	t2, err := time.Parse(time.RFC3339Nano, c[j].ContainerInfo().Created)
 	if err != nil {
-		t2 = time.Now()
+		t2 = time.Time{}
 	}
 
 	return t1.Before(t2)
