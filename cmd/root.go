@@ -86,7 +86,11 @@ func PreRun(cmd *cobra.Command, _ []string) {
 	scheduleSpec, _ = f.GetString("schedule")
 
 	flags.GetSecretsFromFiles(cmd)
-	cleanup, noRestart, monitorOnly, timeout = flags.ReadFlags(cmd)
+	rf := flags.ReadFlags(cmd)
+	cleanup = rf.Cleanup
+	noRestart = rf.NoRestart
+	monitorOnly = rf.MonitorOnly
+	timeout = rf.Timeout
 
 	if timeout < 0 {
 		log.Fatal("Please specify a positive value for timeout value.")
@@ -120,13 +124,16 @@ func PreRun(cmd *cobra.Command, _ []string) {
 		log.Warn("Using `DOCKWATCH_NO_PULL` and `DOCKWATCH_MONITOR_ONLY` simultaneously might lead to no action being taken at all. If this is intentional, you may safely ignore this message.")
 	}
 
-	client = container.NewClient(container.ClientOptions{
+	client, err = container.NewClient(container.ClientOptions{
 		IncludeStopped:    includeStopped,
 		ReviveStopped:     reviveStopped,
 		RemoveVolumes:     removeVolumes,
 		IncludeRestarting: includeRestarting,
 		WarnOnHeadFailed:  container.WarningStrategy(warnOnHeadPullFailed),
 	})
+	if err != nil {
+		log.Fatalf("Error instantiating Docker client: %s", err)
+	}
 
 }
 

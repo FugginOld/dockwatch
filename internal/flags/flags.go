@@ -299,30 +299,35 @@ func EnvConfig(cmd *cobra.Command) error {
 	return nil
 }
 
+// RunFlags holds the common runtime flags read by ReadFlags
+type RunFlags struct {
+	Cleanup     bool
+	NoRestart   bool
+	MonitorOnly bool
+	Timeout     time.Duration
+}
+
 // ReadFlags reads common flags used in the main program flow of dockwatch
-func ReadFlags(cmd *cobra.Command) (bool, bool, bool, time.Duration) {
+func ReadFlags(cmd *cobra.Command) RunFlags {
 	flags := cmd.PersistentFlags()
 
 	var err error
-	var cleanup bool
-	var noRestart bool
-	var monitorOnly bool
-	var timeout time.Duration
+	var rf RunFlags
 
-	if cleanup, err = flags.GetBool("cleanup"); err != nil {
+	if rf.Cleanup, err = flags.GetBool("cleanup"); err != nil {
 		log.Fatal(err)
 	}
-	if noRestart, err = flags.GetBool("no-restart"); err != nil {
+	if rf.NoRestart, err = flags.GetBool("no-restart"); err != nil {
 		log.Fatal(err)
 	}
-	if monitorOnly, err = flags.GetBool("monitor-only"); err != nil {
+	if rf.MonitorOnly, err = flags.GetBool("monitor-only"); err != nil {
 		log.Fatal(err)
 	}
-	if timeout, err = flags.GetDuration("stop-timeout"); err != nil {
+	if rf.Timeout, err = flags.GetDuration("stop-timeout"); err != nil {
 		log.Fatal(err)
 	}
 
-	return cleanup, noRestart, monitorOnly, timeout
+	return rf
 }
 
 func setEnvOptStr(env string, opt string) error {
