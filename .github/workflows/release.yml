@@ -56,6 +56,8 @@ jobs:
     needs: 
       - test
       - lint
+    permissions:
+      contents: write
     env:
       CGO_ENABLED: 0
       TAG: ${{ github.ref_name }}
