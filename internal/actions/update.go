@@ -18,7 +18,7 @@ import (
 // the new image.
 func Update(client container.Client, params types.UpdateParams) (types.Report, error) {
 	log.Debug("Checking containers for updated images")
-	progress := &session.Progress{}
+	progress := session.Progress{}
 	staleCount := 0
 
 	if params.LifecycleHooks {

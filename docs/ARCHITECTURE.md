@@ -67,9 +67,13 @@ This avoids breaking linked service chains during rolling updates.
 
 - Interface-driven Docker client boundary for easier test mocking
 - Controller-based schedule abstraction with explicit Set and Stop lifecycle
-- Channel lock to ensure one update run at a time across scheduler and API
+- Channel lock (per-handler, not global) to ensure one update run at a time across scheduler and API
+- Local `http.ServeMux` per API instance — handlers are not registered on the global default mux, allowing multiple independent API instances and avoiding test cross-contamination
+- `RunFlags` struct returned by `ReadFlags` replaces positional multi-value returns, preventing accidental argument swap
+- `NewClient` returns `(Client, error)` so callers control error handling rather than taking a fatal exit inside library code
 - Separation of concerns between filtering, updating, sorting, and reporting
 - Configuration normalization through aliases like cron->schedule and force-update->run-once
+- Container staleness and link-restarting state are unexported fields accessed only through typed getter/setter methods (`IsStale`, `SetStale`, `IsLinkedToRestarting`, `SetLinkedToRestarting`)
 
 ## Security Notes
 

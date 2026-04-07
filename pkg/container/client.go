@@ -2,6 +2,7 @@ package container
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"github.com/docker/docker/api/types/network"
 	sdkClient "github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 
 	"github.com/fugginold/dockwatch/pkg/registry"
 	"github.com/fugginold/dockwatch/pkg/registry/digest"
@@ -42,17 +42,16 @@ type Client interface {
 //   - DOCKER_HOST			the docker-engine host to send api requests to
 //   - DOCKER_TLS_VERIFY		whether to verify tls certificates
 //   - DOCKER_API_VERSION	the minimum docker api version to work with
-func NewClient(opts ClientOptions) Client {
+func NewClient(opts ClientOptions) (Client, error) {
 	cli, err := sdkClient.NewClientWithOpts(sdkClient.FromEnv)
-
 	if err != nil {
-		log.Fatalf("Error instantiating Docker client: %s", err)
+		return nil, err
 	}
 
 	return dockerClient{
 		api:           cli,
 		ClientOptions: opts,
-	}
+	}, nil
 }
 
 // ClientOptions contains the options for how the docker client wrapper should behave
@@ -295,19 +294,12 @@ func (client dockerClient) StartContainer(c t.Container) (t.ContainerID, error) 
 		return createdContainerID, nil
 	}
 
-	return createdContainerID, client.doStartContainer(bg, c, createdContainer)
-
-}
-
-func (client dockerClient) doStartContainer(bg context.Context, c t.Container, creation container.CreateResponse) error {
-	name := c.Name()
-
-	log.Debugf("Starting container %s (%s)", name, t.ContainerID(creation.ID).ShortID())
-	err := client.api.ContainerStart(bg, creation.ID, container.StartOptions{})
-	if err != nil {
-		return err
+	log.Debugf("Starting container %s (%s)", name, createdContainerID.ShortID())
+	if err := client.api.ContainerStart(bg, createdContainer.ID, container.StartOptions{}); err != nil {
+		return createdContainerID, err
 	}
-	return nil
+	return createdContainerID, nil
+
 }
 
 func (client dockerClient) RenameContainer(c t.Container, newName string) error {
