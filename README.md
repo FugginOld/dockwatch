@@ -22,6 +22,89 @@
 
 </div>
 
+## What It Does
+
+**Dockwatch** is a Docker container auto-update daemon written in Go. It monitors running Docker containers, checks if their base images have been updated in a registry, and automatically pulls the new image and restarts the container with the same configuration. Think of it as a self-hosted alternative to tools like Watchtower.
+
+## Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| **Go** (≥1.25) | Primary language |
+| **Docker SDK** (`docker/docker`, `docker/cli`) | Container management via Unix socket |
+| **Cobra + Pflag** | CLI framework and flag parsing |
+| **Viper** | Config from env vars / files |
+| **robfig/cron** | Cron-style scheduling (`--schedule "@every 24h"`) |
+| **Logrus** | Structured logging |
+| **Prometheus client** | Metrics exposure via HTTP |
+| **Ginkgo + Gomega** | BDD-style test suite |
+| **Testify** | Additional test assertions/mocks |
+| **MkDocs** | Documentation site |
+
+## Repository Structure
+
+```
+dockwatch/
+├── main.go                    # Entrypoint — calls cmd.Execute()
+├── cmd/
+│   └── root.go                # Cobra root command: PreRun (config) + Run (main loop)
+├── internal/                  # Private application code
+│   ├── actions/               # Core business logic: update.go, check.go
+│   ├── flags/                 # CLI flag registration, env-var binding, logging setup
+│   ├── meta/                  # Version metadata
+│   └── util/                  # Misc helpers (random names, SHA256)
+├── pkg/                       # Reusable/public packages
+│   ├── api/                   # HTTP API server + handlers:
+│   │   ├── api.go             #   - base server with token auth
+│   │   ├── update/            #   - POST endpoint to trigger updates
+│   │   ├── schedule/          #   - GET/POST to inspect/modify schedule
+│   │   └── metrics/           #   - Prometheus metrics endpoint
+│   ├── container/             # Docker client wrapper (list, stop, start, pull, rename)
+│   ├── filters/               # Container filtering by name, label, scope
+│   ├── lifecycle/             # Pre/post update hook execution inside containers
+│   ├── metrics/               # Internal metrics model (scanned/updated/failed counters)
+│   ├── registry/              # Image registry interaction
+│   │   ├── auth/              #   - Docker Hub + private registry authentication
+│   │   ├── digest/            #   - Image digest comparison
+│   │   ├── manifest/          #   - Manifest fetching
+│   │   └── helpers/           #   - URL/ref parsing utilities
+│   ├── session/               # Per-run progress tracking and final report
+│   ├── sorter/                # Topological sort of containers by dependency links
+│   └── types/                 # Shared interfaces and data structs (Container, Filter, Report…)
+├── dockerfiles/               # Dockerfile variants (dev, self-contained, networking)
+├── docker-compose.yml         # Full local dev stack (dockwatch + Prometheus + Grafana + demo containers)
+├── prometheus/                # Prometheus config for scraping dockwatch metrics
+├── grafana/                   # Grafana provisioning/dashboards
+├── docs/                      # MkDocs documentation source
+└── scripts/                   # install-dockwatch.sh helper script
+```
+
+## How It Works (Execution Flow)
+
+1. **`main.go`** initializes logging and calls `cmd.Execute()`.
+2. **`cmd/root.go` PreRun** parses flags/env-vars, creates the Docker `container.Client`.
+3. **`cmd/root.go` Run** does one of two things:
+   - **Run-once mode** (`--run-once`): calls `runUpdates()` immediately and exits.
+   - **Daemon mode**: starts a `scheduleController` (cron job) and optionally an HTTP API.
+4. **`runUpdates()`** calls `actions.Update()` which:
+   - Lists containers matching the configured filter
+   - For each container, calls `client.IsContainerStale()` — compares the local image digest vs. the registry
+   - Sorts stale containers by dependency order (`sorter.SortByDependencies`)
+   - Stops containers in **reverse** dependency order
+   - Pulls new images and restarts containers in **forward** dependency order
+   - Optionally runs **lifecycle hooks** (pre/post update commands inside containers)
+   - Optionally cleans up old images
+5. Results are collected into a **session report** and fed into **Prometheus metrics**.
+
+## Key Architectural Patterns
+
+- **Interface-driven design**: `container.Client` is an interface, making the whole system mockable for tests.
+- **Dependency-aware updates**: The `sorter` package topologically sorts containers so that parents restart before children.
+- **Label system**: Containers can opt in/out of updates and configure behavior via Docker labels (e.g., `com.centurylinklabs.dockwatch.depends-on`).
+- **HTTP API** (optional): Exposes endpoints to trigger updates on demand and inspect/change the schedule — protected by a bearer token.
+- **Prometheus metrics**: Exposes scan counts (scanned/updated/failed) at `:8080` for observability.
+- **Concurrency safety**: A channel-based mutex (`updateLock`) ensures only one update run happens at a time, even if the HTTP API and scheduler fire simultaneously.
+
 ## Quick Start
 
 Dockwatch is actively maintained as a container update automation tool for Docker environments.
