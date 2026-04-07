@@ -59,7 +59,12 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement.
+reported to the community leaders responsible for enforcement by opening a
+[GitHub issue](https://github.com/FugginOld/dockwatch/issues) or by contacting
+a maintainer directly via the GitHub profile contact options. If your report
+contains sensitive information, please note that in your message and it will be
+handled as confidentially as possible, shared only with those who need it to
+review and investigate the incident.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
