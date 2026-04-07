@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/fugginold/dockwatch/internal/meta"
 	"github.com/fugginold/dockwatch/pkg/api"
 	apiMetrics "github.com/fugginold/dockwatch/pkg/api/metrics"
+	apiSchedule "github.com/fugginold/dockwatch/pkg/api/schedule"
 	"github.com/fugginold/dockwatch/pkg/api/update"
 	"github.com/fugginold/dockwatch/pkg/container"
 	"github.com/fugginold/dockwatch/pkg/filters"
@@ -176,6 +178,19 @@ func Run(c *cobra.Command, names []string) {
 	// The lock is shared between the scheduler and the HTTP API. It only allows one update to run at a time.
 	updateLock := make(chan bool, 1)
 	updateLock <- true
+	periodicEnabled := !enableUpdateAPI || unblockHTTPAPI
+
+	var scheduleCtrl *scheduleController
+	if periodicEnabled {
+		scheduleCtrl = newScheduleController(updateLock, filter)
+		nextRun, err := scheduleCtrl.Set(scheduleSpec)
+		if err != nil {
+			log.Error(err)
+			os.Exit(1)
+			return
+		}
+		writeStartupMessage(c, nextRun, filterDesc)
+	}
 
 	httpAPI := api.New(apiToken)
 
@@ -185,6 +200,15 @@ func Run(c *cobra.Command, names []string) {
 			metrics.RegisterScan(metric)
 		}, updateLock)
 		httpAPI.RegisterFunc(updateHandler.Path, updateHandler.Handle)
+
+		if periodicEnabled {
+			scheduleHandler := apiSchedule.New(
+				func() string { return scheduleCtrl.Current() },
+				func() time.Time { return scheduleCtrl.NextRun() },
+				func(spec string) (time.Time, error) { return scheduleCtrl.Set(spec) },
+			)
+			httpAPI.RegisterFunc(scheduleHandler.Path, scheduleHandler.Handle)
+		}
 		// If polling isn't enabled the scheduler is never started, and
 		// we need to trigger the startup messages manually.
 		if !unblockHTTPAPI {
@@ -201,8 +225,11 @@ func Run(c *cobra.Command, names []string) {
 		log.Error("failed to start API", err)
 	}
 
-	if err := runUpgradesOnSchedule(c, filter, filterDesc, updateLock); err != nil {
-		log.Error(err)
+	if periodicEnabled {
+		waitForInterrupt()
+		scheduleCtrl.Stop()
+		log.Info("Waiting for running update to be finished...")
+		<-updateLock
 	}
 
 	os.Exit(1)
@@ -287,51 +314,93 @@ func writeStartupMessage(c *cobra.Command, sched time.Time, filtering string) {
 	}
 }
 
-func runUpgradesOnSchedule(c *cobra.Command, filter t.Filter, filtering string, lock chan bool) error {
-	if lock == nil {
-		lock = make(chan bool, 1)
-		lock <- true
-	}
-
-	scheduler := cron.New()
-	err := scheduler.AddFunc(
-		scheduleSpec,
-		func() {
-			select {
-			case v := <-lock:
-				defer func() { lock <- v }()
-				metric := runUpdates(filter)
-				metrics.RegisterScan(metric)
-			default:
-				// Update was skipped
-				metrics.RegisterScan(nil)
-				log.Debug("Skipped another update already running.")
-			}
-
-			nextRuns := scheduler.Entries()
-			if len(nextRuns) > 0 {
-				log.Debug("Scheduled next run: " + nextRuns[0].Next.String())
-			}
-		})
-
-	if err != nil {
-		return err
-	}
-
-	writeStartupMessage(c, scheduler.Entries()[0].Schedule.Next(time.Now()), filtering)
-
-	scheduler.Start()
-
-	// Graceful shut-down on SIGINT/SIGTERM
+func waitForInterrupt() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	signal.Notify(interrupt, syscall.SIGTERM)
 
 	<-interrupt
-	scheduler.Stop()
-	log.Info("Waiting for running update to be finished...")
-	<-lock
-	return nil
+}
+
+type scheduleController struct {
+	mu        sync.Mutex
+	scheduler *cron.Cron
+	lock      chan bool
+	filter    t.Filter
+	spec      string
+}
+
+func newScheduleController(lock chan bool, filter t.Filter) *scheduleController {
+	return &scheduleController{
+		lock:   lock,
+		filter: filter,
+	}
+}
+
+func (c *scheduleController) Set(spec string) (time.Time, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	scheduler := cron.New()
+	err := scheduler.AddFunc(spec, func() {
+		select {
+		case v := <-c.lock:
+			defer func() { c.lock <- v }()
+			metric := runUpdates(c.filter)
+			metrics.RegisterScan(metric)
+		default:
+			metrics.RegisterScan(nil)
+			log.Debug("Skipped another update already running.")
+		}
+
+		nextRuns := scheduler.Entries()
+		if len(nextRuns) > 0 {
+			log.Debug("Scheduled next run: " + nextRuns[0].Next.String())
+		}
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	nextRun := scheduler.Entries()[0].Schedule.Next(time.Now())
+	scheduler.Start()
+
+	if c.scheduler != nil {
+		c.scheduler.Stop()
+	}
+
+	c.scheduler = scheduler
+	c.spec = spec
+	scheduleSpec = spec
+
+	return nextRun, nil
+}
+
+func (c *scheduleController) Current() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.spec
+}
+
+func (c *scheduleController) NextRun() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.scheduler == nil {
+		return time.Time{}
+	}
+	entries := c.scheduler.Entries()
+	if len(entries) == 0 {
+		return time.Time{}
+	}
+	return entries[0].Next
+}
+
+func (c *scheduleController) Stop() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.scheduler != nil {
+		c.scheduler.Stop()
+	}
 }
 
 func runUpdates(filter t.Filter) *metrics.Metric {

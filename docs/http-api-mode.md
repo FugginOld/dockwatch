@@ -1,6 +1,7 @@
 Dockwatch provides an HTTP API mode that enables an HTTP endpoint that can be requested to trigger container updating. The current available endpoint list is:
 
 -   `/v1/update` - triggers an update for all of the containers monitored by this Dockwatch instance.
+-   `/v1/schedule` - gets or updates the periodic cron schedule while dockwatch is running.
 
 ---
 
@@ -30,6 +31,8 @@ services:
 
 By default, enabling this mode prevents periodic polls (i.e. what is specified using `--interval` or `--schedule`). To run periodic updates regardless, pass `--http-api-periodic-polls`.
 
+`/v1/schedule` is only available when periodic polls are enabled with `--http-api-periodic-polls`.
+
 Notice that there is an environment variable named DOCKWATCH_HTTP_API_TOKEN. To prevent external services from accidentally triggering image updates, all of the requests have to contain a "Token" field, valued as the token defined in DOCKWATCH_HTTP_API_TOKEN, in their headers. In this case, there is a port bind to the host machine, allowing to request localhost:8080 to reach Dockwatch. The following `curl` command would trigger an image update:
 
 ```bash
@@ -42,4 +45,24 @@ In order to update only certain images, the image names can be provided as URL q
 
 ```bash
 curl -H "Authorization: Bearer mytoken" localhost:8080/v1/update?image=foo/bar,foo/baz
+```
+
+---
+
+Read the active schedule and next run:
+
+```bash
+curl -H "Authorization: Bearer mytoken" localhost:8080/v1/schedule
+```
+
+Update the schedule without restarting dockwatch:
+
+```bash
+curl -X POST -H "Authorization: Bearer mytoken" "localhost:8080/v1/schedule?schedule=@every%2030m"
+```
+
+`cron` can be used as a query alias for `schedule`:
+
+```bash
+curl -X POST -H "Authorization: Bearer mytoken" "localhost:8080/v1/schedule?cron=@daily"
 ```
