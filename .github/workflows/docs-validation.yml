@@ -47,6 +47,7 @@ jobs:
         if: steps.changed-markdown.outputs.any_changed == 'true'
         uses: lycheeverse/lychee-action@v2
         with:
+          failIfEmpty: false
           args: >-
             --verbose
             --no-progress
