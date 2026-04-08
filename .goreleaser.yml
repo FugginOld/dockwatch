@@ -2,6 +2,7 @@ version: 2
 
 release:
   replace_existing_artifacts: true
+  make_latest: true
 
 builds:
   - id: dockwatch
