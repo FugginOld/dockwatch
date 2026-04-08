@@ -42,7 +42,7 @@ dockers:
       - fugginold/dockwatch:amd64-latest
       - ghcr.io/fugginold/dockwatch:amd64-{{ .Version }}
       - ghcr.io/fugginold/dockwatch:amd64-latest
-    binaries:
+    ids:
       - dockwatch
   - 
     use_buildx: true
@@ -56,7 +56,7 @@ dockers:
       - fugginold/dockwatch:i386-latest
       - ghcr.io/fugginold/dockwatch:i386-{{ .Version }}
       - ghcr.io/fugginold/dockwatch:i386-latest
-    binaries:
+    ids:
       - dockwatch
   - 
     use_buildx: true
@@ -70,7 +70,7 @@ dockers:
       - fugginold/dockwatch:armhf-latest
       - ghcr.io/fugginold/dockwatch:armhf-{{ .Version }}
       - ghcr.io/fugginold/dockwatch:armhf-latest
-    binaries:
+    ids:
       - dockwatch
   - 
     use_buildx: true
@@ -84,5 +84,5 @@ dockers:
       - fugginold/dockwatch:arm64v8-latest
       - ghcr.io/fugginold/dockwatch:arm64v8-{{ .Version }}
       - ghcr.io/fugginold/dockwatch:arm64v8-latest
-    binaries:
+    ids:
       - dockwatch
