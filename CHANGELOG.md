@@ -2,6 +2,12 @@
 
 ## Unreleased - 2026-04-07
 
+- No unreleased changes yet.
+
+---
+
+## 0.1.8 - 2026-04-07
+
 ### Fixed
 
 - Applied TLS skip-verify handling to registry auth HTTP clients, not only digest checks.
