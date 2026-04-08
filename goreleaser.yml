@@ -1,3 +1,5 @@
+release:
+  replace_existing_artifacts: true
 build:
   main: ./main.go
   binary: dockwatch
