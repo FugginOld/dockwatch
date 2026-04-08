@@ -180,9 +180,9 @@ jobs:
             docker manifest push fugginold/dockwatch:latest
       - name: Push manifests to GitHub Container Registry
         run: |
-          docker login -u $DOCKER_USER -p $DOCKER_TOKEN ghcr.io && \
-            docker manifest push ghcr.io/fugginold/dockwatch:$(echo $TAG | sed 's/^v*//') && \
-            docker manifest push ghcr.io/fugginold/dockwatch:latest
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker manifest push ghcr.io/fugginold/dockwatch:$(echo $TAG | sed 's/^v*//')
+          docker manifest push ghcr.io/fugginold/dockwatch:latest
 
   renew-docs:
     name: Refresh pkg.go.dev
