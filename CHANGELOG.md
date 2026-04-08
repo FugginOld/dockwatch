@@ -2,7 +2,14 @@
 
 ## Unreleased - 2026-04-07
 
-- No unreleased changes yet.
+### Changed
+
+- Updated `scripts/push-dockerhub.sh` to support multi-architecture Buildx publishing by default with configurable platforms and builder name.
+- Added `--platforms` and `--builder` options to release script for reproducible Docker publish workflow.
+
+### Fixed
+
+- Added local release and preview artifact patterns to `.gitignore` to prevent noisy/unintended git status changes during release operations.
 
 ---
 

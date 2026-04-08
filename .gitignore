@@ -16,3 +16,8 @@ docs/assets/wasm_exec.js
 *.tar.gz
 oryxBuildBinary
 docs/assets/*.wasm
+
+# Local release/preview artifacts
+dockwatch_linux_*
+README*.preview.md
+README*.preview.html

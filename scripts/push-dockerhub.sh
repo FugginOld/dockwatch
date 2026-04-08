@@ -9,27 +9,31 @@ VERSION_TAG=""
 PUSH_LATEST=1
 NO_CACHE=0
 USE_LEGACY_BUILDER=0
+PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64,linux/arm/v7,linux/386}"
+BUILDER_NAME="${BUILDER_NAME:-dockwatch-builder}"
 
 usage() {
   cat <<'EOF'
 Build and push Dockwatch Docker images to Docker Hub.
 
 Usage:
-  ./scripts/push-dockerhub.sh [--tag <version>] [--image <repo/name>] [--no-latest] [--no-cache] [--legacy-builder]
+  ./scripts/push-dockerhub.sh [--tag <version>] [--image <repo/name>] [--no-latest] [--no-cache] [--legacy-builder] [--platforms <csv>] [--builder <name>]
 
 Options:
-  --tag <version>     Also push an explicit version tag (example: 0.1.1).
+  --tag <version>     Also push an explicit version tag (example: 0.1.8).
   --image <repo/name> Override image name (default: fugginold/dockwatch).
   --no-latest         Do not push the latest tag.
   --no-cache          Build without using Docker layer cache.
-  --legacy-builder    Disable BuildKit for this build.
+  --legacy-builder    Use single-arch local docker build/push flow.
+  --platforms <csv>   Target platforms for buildx (default: linux/amd64,linux/arm64,linux/arm/v7,linux/386).
+  --builder <name>    Buildx builder name (default: dockwatch-builder).
   -h, --help          Show this help message.
 
 Examples:
-  ./scripts/push-dockerhub.sh
-  ./scripts/push-dockerhub.sh --tag 0.1.1
-  ./scripts/push-dockerhub.sh --image myuser/dockwatch --tag 0.1.1
-  ./scripts/push-dockerhub.sh --legacy-builder --no-cache --tag 0.1.1
+  ./scripts/push-dockerhub.sh --tag 0.1.8
+  ./scripts/push-dockerhub.sh --image myuser/dockwatch --tag 0.1.8
+  ./scripts/push-dockerhub.sh --platforms linux/amd64,linux/arm64 --tag 0.1.8
+  ./scripts/push-dockerhub.sh --legacy-builder --no-cache --tag 0.1.8
 EOF
 }
 
@@ -56,6 +60,16 @@ while [[ $# -gt 0 ]]; do
     --legacy-builder)
       USE_LEGACY_BUILDER=1
       shift
+      ;;
+    --platforms)
+      [[ $# -ge 2 ]] || { echo "Error: --platforms requires a value"; exit 1; }
+      PLATFORMS="$2"
+      shift 2
+      ;;
+    --builder)
+      [[ $# -ge 2 ]] || { echo "Error: --builder requires a value"; exit 1; }
+      BUILDER_NAME="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -86,32 +100,59 @@ fi
 
 cd "$REPO_ROOT"
 
-build_args=(-f dockerfiles/Dockerfile.dev-self-contained -t "${IMAGE}:latest")
-if [[ "$NO_CACHE" -eq 1 ]]; then
-  build_args+=(--no-cache)
-fi
-build_args+=(.)
-
-echo "Building image ${IMAGE}:latest using dockerfiles/Dockerfile.dev-self-contained..."
 if [[ "$USE_LEGACY_BUILDER" -eq 1 ]]; then
+  build_args=(-f dockerfiles/Dockerfile.dev-self-contained -t "${IMAGE}:latest")
+  if [[ "$NO_CACHE" -eq 1 ]]; then
+    build_args+=(--no-cache)
+  fi
+  build_args+=(.)
+
+  echo "Building image ${IMAGE}:latest using legacy single-arch flow..."
   DOCKER_BUILDKIT=0 docker build "${build_args[@]}"
+
+  if [[ -n "$VERSION_TAG" ]]; then
+    echo "Tagging image ${IMAGE}:${VERSION_TAG}..."
+    docker tag "${IMAGE}:latest" "${IMAGE}:${VERSION_TAG}"
+  fi
+
+  if [[ "$PUSH_LATEST" -eq 1 ]]; then
+    echo "Pushing ${IMAGE}:latest..."
+    docker push "${IMAGE}:latest"
+  fi
+
+  if [[ -n "$VERSION_TAG" ]]; then
+    echo "Pushing ${IMAGE}:${VERSION_TAG}..."
+    docker push "${IMAGE}:${VERSION_TAG}"
+  fi
 else
-  docker build "${build_args[@]}"
-fi
+  if ! docker buildx inspect "$BUILDER_NAME" >/dev/null 2>&1; then
+    docker buildx create --name "$BUILDER_NAME" --use >/dev/null
+  else
+    docker buildx use "$BUILDER_NAME"
+  fi
 
-if [[ -n "$VERSION_TAG" ]]; then
-  echo "Tagging image ${IMAGE}:${VERSION_TAG}..."
-  docker tag "${IMAGE}:latest" "${IMAGE}:${VERSION_TAG}"
-fi
+  docker buildx inspect --bootstrap >/dev/null
 
-if [[ "$PUSH_LATEST" -eq 1 ]]; then
-  echo "Pushing ${IMAGE}:latest..."
-  docker push "${IMAGE}:latest"
-fi
+  tags=()
+  if [[ "$PUSH_LATEST" -eq 1 ]]; then
+    tags+=(--tag "${IMAGE}:latest")
+  fi
+  if [[ -n "$VERSION_TAG" ]]; then
+    tags+=(--tag "${IMAGE}:${VERSION_TAG}")
+  fi
 
-if [[ -n "$VERSION_TAG" ]]; then
-  echo "Pushing ${IMAGE}:${VERSION_TAG}..."
-  docker push "${IMAGE}:${VERSION_TAG}"
+  buildx_args=(
+    --platform "$PLATFORMS"
+    --file dockerfiles/Dockerfile.dev-self-contained
+    --provenance=false
+    --push
+  )
+  if [[ "$NO_CACHE" -eq 1 ]]; then
+    buildx_args+=(--no-cache)
+  fi
+
+  echo "Building and pushing multi-arch images for ${IMAGE} on ${PLATFORMS}..."
+  docker buildx build "${buildx_args[@]}" "${tags[@]}" .
 fi
 
 echo "Done."
