@@ -7,16 +7,11 @@ builds:
   - id: dockwatch
     main: ./main.go
     binary: dockwatch
-    goos:
-      - linux
-      - windows
-    goarch:
-      - amd64
-      - 386
-      - arm
-      - arm64
+    goos: [linux, windows]
+    goarch: [amd64, 386, arm, arm64]
+    goarm: ["6"]
     ldflags:
-      - -s -w -X github.com/fugginold/dockwatch/internal/meta.Version={{.Version}}
+      - -s -w -X github.com/fugginold/dockwatch/internal/meta.Version={{ .Version }}
 
 archives:
   - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ if eq .Arch \"arm\" }}armhf{{ else if eq .Arch \"arm64\" }}arm64v8{{ else }}{{ .Arch }}{{ end }}"
@@ -32,8 +27,7 @@ checksum:
 
 dockers:
   - use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64"
+    build_flag_templates: ["--platform=linux/amd64"]
     goos: linux
     goarch: amd64
     dockerfile: dockerfiles/Dockerfile
@@ -42,12 +36,10 @@ dockers:
       - fugginold/dockwatch:amd64-latest
       - ghcr.io/fugginold/dockwatch:amd64-{{ .Version }}
       - ghcr.io/fugginold/dockwatch:amd64-latest
-    ids:
-      - dockwatch
+    ids: [dockwatch]
 
   - use: buildx
-    build_flag_templates:
-      - "--platform=linux/386"
+    build_flag_templates: ["--platform=linux/386"]
     goos: linux
     goarch: 386
     dockerfile: dockerfiles/Dockerfile
@@ -56,12 +48,10 @@ dockers:
       - fugginold/dockwatch:i386-latest
       - ghcr.io/fugginold/dockwatch:i386-{{ .Version }}
       - ghcr.io/fugginold/dockwatch:i386-latest
-    ids:
-      - dockwatch
+    ids: [dockwatch]
 
   - use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm/v6"
+    build_flag_templates: ["--platform=linux/arm/v6"]
     goos: linux
     goarch: arm
     goarm: "6"
@@ -71,12 +61,10 @@ dockers:
       - fugginold/dockwatch:armhf-latest
       - ghcr.io/fugginold/dockwatch:armhf-{{ .Version }}
       - ghcr.io/fugginold/dockwatch:armhf-latest
-    ids:
-      - dockwatch
+    ids: [dockwatch]
 
   - use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm64/v8"
+    build_flag_templates: ["--platform=linux/arm64/v8"]
     goos: linux
     goarch: arm64
     dockerfile: dockerfiles/Dockerfile
@@ -85,5 +73,4 @@ dockers:
       - fugginold/dockwatch:arm64v8-latest
       - ghcr.io/fugginold/dockwatch:arm64v8-{{ .Version }}
       - ghcr.io/fugginold/dockwatch:arm64v8-latest
-    ids:
-      - dockwatch
+    ids: [dockwatch]
