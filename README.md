@@ -10,8 +10,6 @@
   <p>A process for automating Docker container base image updates.</p>
 
   <p>
-    <a href="https://circleci.com/gh/fugginold/dockwatch"><img alt="Circle CI" src="https://circleci.com/gh/fugginold/dockwatch.svg?style=shield"></a>
-    <a href="https://codecov.io/gh/fugginold/dockwatch"><img alt="codecov" src="https://codecov.io/gh/fugginold/dockwatch/branch/main/graph/badge.svg"></a>
     <a href="https://godoc.org/github.com/fugginold/dockwatch"><img alt="GoDoc" src="https://godoc.org/github.com/fugginold/dockwatch?status.svg"></a>
     <a href="https://goreportcard.com/report/github.com/fugginold/dockwatch"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/fugginold/dockwatch"></a>
     <a href="https://github.com/fugginold/dockwatch/releases"><img alt="latest version" src="https://img.shields.io/github/tag/fugginold/dockwatch.svg"></a>
