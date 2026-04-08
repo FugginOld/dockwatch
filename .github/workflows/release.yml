@@ -84,6 +84,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Delete existing release assets
         run: |
+          if [ "${GITHUB_REF_TYPE}" != "tag" ] || [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+            echo "Current ref '${GITHUB_REF}' is not a tag ref; skipping release asset cleanup."
+            exit 0
+          fi
           TAG="${GITHUB_REF_NAME}"
           ASSETS=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
             --json assets --jq '.assets[].name' 2>&1) && HAS_RELEASE=true || HAS_RELEASE=false
@@ -92,12 +96,19 @@ jobs:
           elif [ -z "$ASSETS" ]; then
             echo "Release $TAG exists but has no assets – nothing to clean up."
           else
-            echo "Release $TAG found – deleting existing assets before re-upload..."
+            echo "Release $TAG found – deleting expected GoReleaser assets before re-upload..."
             echo "$ASSETS" | while IFS= read -r asset; do
-              echo "Deleting asset: $asset"
-              ERR=$(gh release delete-asset "$TAG" "$asset" --yes \
-                --repo "$GITHUB_REPOSITORY" 2>&1) || \
-                echo "Warning: could not delete '$asset': $ERR"
+              case "$asset" in
+                dockwatch_*)
+                  echo "Deleting GoReleaser asset: $asset"
+                  ERR=$(gh release delete-asset "$TAG" "$asset" --yes \
+                    --repo "$GITHUB_REPOSITORY" 2>&1) || \
+                    echo "Warning: could not delete '$asset': $ERR"
+                  ;;
+                *)
+                  echo "Skipping non-GoReleaser asset: $asset"
+                  ;;
+              esac
             done
           fi
         env:
