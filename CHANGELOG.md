@@ -2,6 +2,12 @@
 
 ## Unreleased - 2026-04-07
 
+- No unreleased changes yet.
+
+---
+
+## 0.1.9 - 2026-04-07
+
 ### Changed
 
 - Updated `scripts/push-dockerhub.sh` to support multi-architecture Buildx publishing by default with configurable platforms and builder name.
