@@ -7,16 +7,9 @@ builds:
   - id: dockwatch
     main: ./main.go
     binary: dockwatch
-    goos:
-      - linux
-      - windows
-    goarch:
-      - amd64
-      - 386
-      - arm
-      - arm64
-    goarm:
-      - "6"
+    goos: [linux, windows]
+    goarch: [amd64, 386, arm, arm64]
+    goarm: ["6"]
     ldflags:
       - -s -w -X github.com/fugginold/dockwatch/internal/meta.Version={{ .Version }}
 
@@ -34,8 +27,7 @@ checksum:
 
 dockers:
   - use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64"
+    build_flag_templates: ["--platform=linux/amd64"]
     goos: linux
     goarch: amd64
     dockerfile: dockerfiles/Dockerfile
@@ -47,8 +39,7 @@ dockers:
     ids: [dockwatch]
 
   - use: buildx
-    build_flag_templates:
-      - "--platform=linux/386"
+    build_flag_templates: ["--platform=linux/386"]
     goos: linux
     goarch: 386
     dockerfile: dockerfiles/Dockerfile
@@ -60,8 +51,7 @@ dockers:
     ids: [dockwatch]
 
   - use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm/v6"
+    build_flag_templates: ["--platform=linux/arm/v6"]
     goos: linux
     goarch: arm
     goarm: "6"
@@ -74,8 +64,7 @@ dockers:
     ids: [dockwatch]
 
   - use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm64/v8"
+    build_flag_templates: ["--platform=linux/arm64/v8"]
     goos: linux
     goarch: arm64
     dockerfile: dockerfiles/Dockerfile
