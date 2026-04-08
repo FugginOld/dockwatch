@@ -33,7 +33,7 @@ func GetToken(container types.Container, registryAuth string) (string, error) {
 		return "", err
 	}
 
-	client := &http.Client{}
+	client := helpers.NewHTTPClient()
 	var res *http.Response
 	if res, err = client.Do(req); err != nil {
 		return "", err
@@ -74,7 +74,7 @@ func GetChallengeRequest(URL url.URL) (*http.Request, error) {
 
 // GetBearerHeader tries to fetch a bearer token from the registry based on the challenge instructions
 func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) (string, error) {
-	client := http.Client{}
+	client := helpers.NewHTTPClient()
 	authURL, err := GetAuthURL(challenge, imageRef)
 
 	if err != nil {
