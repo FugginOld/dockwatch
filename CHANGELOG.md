@@ -1,15 +1,37 @@
 # Changelog
 
-## Unreleased - 2026-04-06
+## Unreleased - 2026-04-07
 
-### Docs
+### Fixed
 
-- Added `docs/ARCHITECTURE.md` covering technology stack, repository structure, execution flow, design patterns, and security notes.
-- Added `docs/CONFIGURATION.md` documenting all environment variables, CLI flags, and scheduling examples.
-- Added `docs/API.md` documenting all HTTP API endpoints, auth requirements, and enable-API-mode examples.
-- Added `docs/DEVELOPMENT.md` covering local setup, build, test scripts, and debug tips.
-- Added `docs/TROUBLESHOOTING.md` covering Docker socket issues, API version mismatch, permission errors, and diagnostics.
-- Rewrote `README.md` to focused sections: What It Does, Quick Start, Install & Usage (Debian + Runtime API), and docs index.
+- Applied TLS skip-verify handling to registry auth HTTP clients, not only digest checks.
+- Shared a single HTTP client via `sync.Once` and reduced duplicate TLS warning logs.
+- Added tests for TLS-skip verification helper behavior.
+
+### Removed
+
+- Removed unused `gopher-watchtower.png` image asset.
+
+---
+
+## 0.1.7 - 2026-04-07
+
+### Added
+
+- Added `CODE_OF_CONDUCT.md` based on Contributor Covenant with actionable reporting contact.
+- Added `docs/ARCHITECTURE.md`, `docs/CONFIGURATION.md`, `docs/API.md`, `docs/DEVELOPMENT.md`, and `docs/TROUBLESHOOTING.md`.
+
+### Changed
+
+- Updated `SECURITY.md` to use GitHub private vulnerability disclosure flow.
+- Applied modernization refactors across core runtime and registry packages.
+- Rewrote `README.md` to focused sections for quick start, install flow, and docs references.
+
+### Fixed
+
+- Added zero-time fallback in container created-time sorting and improved error return on start failures.
+- Ran `go mod tidy` updates, including `golang.org/x/text` indirect dependency metadata.
+- Improved docs validation and markdown lint handling in CI.
 
 ---
 
