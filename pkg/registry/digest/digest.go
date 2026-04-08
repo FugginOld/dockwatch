@@ -1,20 +1,16 @@
 package digest
 
 import (
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/fugginold/dockwatch/internal/meta"
 	"github.com/fugginold/dockwatch/pkg/registry/auth"
+	"github.com/fugginold/dockwatch/pkg/registry/helpers"
 	"github.com/fugginold/dockwatch/pkg/registry/manifest"
 	"github.com/fugginold/dockwatch/pkg/types"
 	"github.com/sirupsen/logrus"
@@ -90,26 +86,7 @@ func TransformAuth(registryAuth string) string {
 
 // GetDigest from registry using a HEAD request to prevent rate limiting
 func GetDigest(url string, token string) (string, error) {
-	skipTLSVerify := shouldSkipRegistryTLSVerify()
-	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: skipTLSVerify},
-	}
-
-	if skipTLSVerify {
-		logrus.Warn("Registry TLS certificate verification is disabled. This should only be used for testing or trusted private networks.")
-	}
-
-	client := &http.Client{Transport: tr}
+	client := helpers.NewHTTPClient()
 
 	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
@@ -146,19 +123,4 @@ func GetDigest(url string, token string) (string, error) {
 		return "", fmt.Errorf("registry responded to head request with %q, auth: %q", res.Status, wwwAuthHeader)
 	}
 	return res.Header.Get(ContentDigestHeader), nil
-}
-
-func shouldSkipRegistryTLSVerify() bool {
-	raw := os.Getenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY")
-	if raw == "" {
-		return false
-	}
-
-	skip, err := strconv.ParseBool(raw)
-	if err != nil {
-		logrus.WithError(err).WithField("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", raw).Warn("Invalid boolean value for registry TLS skip verify setting")
-		return false
-	}
-
-	return skip
 }
