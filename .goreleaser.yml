@@ -1,0 +1,35 @@
+version: 2
+release:
+  replace_existing_artifacts: true
+
+builds:
+  - id: dockwatch
+    main: ./main.go
+    binary: dockwatch
+    goos:
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - 386
+      - arm
+      - arm64
+      - arm/v6
+
+archives:
+  - name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.zip'
+    includes:
+      - LICENSE.md
+    checksum:
+      name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
+
+dockers:
+  - image_templates:
+      - 'dockwatch:{{ .Version }}'
+    buildx:
+      - name: "linux/amd64"
+        platforms: "linux/amd64,linux/arm/v6,linux/arm64/v8,linux/386,linux/armhf"
+      - name: "windows/386"
+        platforms: "windows/386"
+      - name: "windows/amd64"
+        platforms: "windows/amd64"
