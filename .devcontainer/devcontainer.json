@@ -1,24 +1,20 @@
 {
-  "name": "Watchtower Dev (Go + Docker)",
-
-  "image": "mcr.microsoft.com/devcontainers/base:debian-12",
-
+  "name": "Go Docker CLI (Debian)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
-
-  "postCreateCommand": "bash .devcontainer/setup.sh",
-
+  "postCreateCommand": "go mod tidy",
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-vscode.go",
+        "golang.Go",
         "ms-azuretools.vscode-docker",
-        "github.copilot",
-        "github.copilot-chat"
+        "github.copilot"
       ]
     }
   },
-
   "remoteUser": "vscode"
 }
