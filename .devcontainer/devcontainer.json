@@ -1,4 +1,42 @@
 {
+  "name": "dockwatch-dev",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.25-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [8080, 3000, 9090],
+  "portsAttributes": {
+    "8080": {
+      "label": "Dockwatch API"
+    },
+    "3000": {
+      "label": "Grafana"
+    },
+    "9090": {
+      "label": "Prometheus"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.testFlags": [
+          "-count=1"
+        ],
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "golang.Go",
+        "ms-azuretools.vscode-docker",
+        "github.vscode-pull-request-github",
+        "github.copilot"
+      ]
+    }
+  },
+  "postCreateCommand": "go mod download",
+  "postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+  "remoteUser": "vscode"
+}{
   "name": "Go Docker CLI (Debian)",
   "build": {
     "dockerfile": "Dockerfile"

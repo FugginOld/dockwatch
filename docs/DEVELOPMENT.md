@@ -2,6 +2,32 @@
 
 ## Local Setup
 
+## VS Code Dev Container
+
+This repository includes a Debian Bookworm-based Dev Container for the most reliable VS Code setup, especially on Windows.
+
+Prerequisites:
+
+- VS Code with the Dev Containers extension
+- Docker Desktop with Linux containers enabled
+- On Windows, WSL 2 is recommended for best filesystem and Docker performance
+
+Open the repo in the container:
+
+```bash
+code .
+```
+
+Then run `Dev Containers: Reopen in Container` from the VS Code command palette. The container uses Go 1.25 on Debian Bookworm, installs GitHub CLI, and provisions Docker CLI access so the existing Docker-based smoke tests can run from inside VS Code.
+
+If you prefer WSL on Windows, clone the repository inside your WSL distribution and open it from there with:
+
+```bash
+code .
+```
+
+That path also works with the included Dev Container and keeps Git operations synced with GitHub through the normal repository remote.
+
 Prerequisites:
 
 - Go 1.25+
