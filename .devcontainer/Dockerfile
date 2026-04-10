@@ -1,8 +1,8 @@
 FROM mcr.microsoft.com/devcontainers/base:debian
 
 # Install Go
-ARG GO_VERSION=1.25
-RUN curl -OL https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz \
+ARG GO_VERSION=1.25.0
+RUN curl -fsSL -o go${GO_VERSION}.linux-amd64.tar.gz https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz \
     && rm -rf /usr/local/go \
     && tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz \
     && rm go${GO_VERSION}.linux-amd64.tar.gz
