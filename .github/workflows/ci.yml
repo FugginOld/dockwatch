@@ -64,6 +64,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute image name
+        id: image
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -73,8 +77,8 @@ jobs:
           build-args: |
             VERSION=${{ github.ref_name }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/dockwatch:latest
-            ghcr.io/${{ github.repository_owner }}/dockwatch:${{ github.sha }}
+            ${{ steps.image.outputs.IMAGE }}:latest
+            ${{ steps.image.outputs.IMAGE }}:${{ github.sha }}
 
   release:
     needs: test
