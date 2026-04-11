@@ -187,16 +187,25 @@ func Run(c *cobra.Command, names []string) {
 	updateLock <- true
 	periodicEnabled := !enableUpdateAPI || unblockHTTPAPI
 
+	stat, _ := os.Stdin.Stat()
+	isInteractive := (stat.Mode() & os.ModeCharDevice) != 0
+
 	var scheduleCtrl *scheduleController
-	if periodicEnabled {
+	if periodicEnabled || isInteractive {
 		scheduleCtrl = newScheduleController(updateLock, filter)
-		nextRun, err := scheduleCtrl.Set(scheduleSpec)
-		if err != nil {
-			log.Error(err)
-			os.Exit(1)
-			return
+		if periodicEnabled {
+			nextRun, err := scheduleCtrl.Set(scheduleSpec)
+			if err != nil {
+				log.Error(err)
+				os.Exit(1)
+				return
+			}
+			writeStartupMessage(c, nextRun, filterDesc)
+		} else {
+			writeStartupMessage(c, time.Time{}, filterDesc)
 		}
-		writeStartupMessage(c, nextRun, filterDesc)
+	} else if !unblockHTTPAPI {
+		writeStartupMessage(c, time.Time{}, filterDesc)
 	}
 
 	httpAPI := api.New(apiToken)
@@ -208,18 +217,13 @@ func Run(c *cobra.Command, names []string) {
 		}, updateLock)
 		httpAPI.RegisterFunc(updateHandler.Path, updateHandler.Handle)
 
-		if periodicEnabled {
+		if scheduleCtrl != nil {
 			scheduleHandler := apiSchedule.New(
 				func() string { return scheduleCtrl.Current() },
 				func() time.Time { return scheduleCtrl.NextRun() },
 				func(spec string) (time.Time, error) { return scheduleCtrl.Set(spec) },
 			)
 			httpAPI.RegisterFunc(scheduleHandler.Path, scheduleHandler.Handle)
-		}
-		// If polling isn't enabled the scheduler is never started, and
-		// we need to trigger the startup messages manually.
-		if !unblockHTTPAPI {
-			writeStartupMessage(c, time.Time{}, filterDesc)
 		}
 	}
 
@@ -228,13 +232,25 @@ func Run(c *cobra.Command, names []string) {
 		httpAPI.RegisterHandler(metricsHandler.Path, metricsHandler.Handle)
 	}
 
-	if err := httpAPI.Start(enableUpdateAPI && !unblockHTTPAPI); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	apiShouldBlock := enableUpdateAPI && !unblockHTTPAPI && !isInteractive
+	if err := httpAPI.Start(apiShouldBlock); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("failed to start API", err)
 	}
 
-	if periodicEnabled {
+	if isInteractive {
+		go func() {
+			runShell(scheduleCtrl, updateLock, filter)
+			// Trigger a clean shutdown when the shell exits
+			p, _ := os.FindProcess(os.Getpid())
+			_ = p.Signal(os.Interrupt)
+		}()
+	}
+
+	if periodicEnabled || isInteractive {
 		waitForInterrupt()
-		scheduleCtrl.Stop()
+		if scheduleCtrl != nil {
+			scheduleCtrl.Stop()
+		}
 		log.Info("Waiting for running update to be finished...")
 		<-updateLock
 	}
