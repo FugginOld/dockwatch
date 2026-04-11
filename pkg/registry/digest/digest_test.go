@@ -110,7 +110,7 @@ var _ = Describe("Digests", func() {
 			server.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyHeader(http.Header{
-						"User-Agent": []string{"Dockwatch/v0.0.0-unknown"},
+						"User-Agent": []string{"Dockwatch/v0.2.0"},
 					}),
 					ghttp.RespondWith(http.StatusOK, "", http.Header{
 						digest.ContentDigestHeader: []string{
