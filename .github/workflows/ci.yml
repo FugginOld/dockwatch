@@ -3,8 +3,6 @@ name: CI/CD
 on:
   push:
     branches: [main]
-    tags:
-      - "v*"
   pull_request:
 
 permissions:
@@ -43,7 +41,7 @@ jobs:
   docker:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
@@ -62,7 +60,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute image name
         id: image
@@ -80,21 +78,4 @@ jobs:
             ${{ steps.image.outputs.IMAGE }}:latest
             ${{ steps.image.outputs.IMAGE }}:${{ github.sha }}
 
-  release:
-    needs: test
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-      packages: write
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
