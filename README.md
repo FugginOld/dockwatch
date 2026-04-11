@@ -29,6 +29,7 @@ Core capabilities:
 - Automatic update detection and rollout
 - One-shot update mode for immediate checks
 - Optional HTTP API for update and schedule control
+- Interactive shell environment for on-the-fly execution
 - Prometheus metrics endpoint
 - Dependency-aware container restart ordering
 
@@ -154,3 +155,4 @@ curl -X POST -H "Authorization: Bearer ${DW_TOKEN}" "http://localhost:8080/v1/sc
 - /docs/lifecycle-hooks.md
 - /docs/container-selection.md
 - /docs/running-multiple-instances.md
+- /docs/interactive-shell.md

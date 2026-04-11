@@ -7,6 +7,14 @@
 - Added an interactive shell interface that automatically activates when Dockwatch operates within a TTY environment.
 - Supported runtime `schedule` and `update` commands directly inside the interactive `dockwatch>` shell.
 
+### Fixed
+
+- Resolved duplicate GitHub Action pipeline triggers on version tags in `ci.yml`.
+- Standardized `meta.Version` testing assertions to map accurately against dynamic module versions.
+- Fixed GHCR Push `403 Forbidden` errors by swapping out an expired `GHCR_PAT` for the native secure `GITHUB_TOKEN`.
+- Resolved `docker manifest create` failures during release by modifying `release.yml` to safely parse and merge `config.json` instead of erasing existing registry authentication tokens.
+- Fixed a final `Refresh pkg.go.dev` documentation pipeline failure by bypassing a third-party GitHub Action that was incompatible with uppercase organization names.
+
 ---
 
 ## 0.1.9 - 2026-04-07
