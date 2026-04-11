@@ -122,8 +122,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Enable experimental docker features
         run: |
-          mkdir -p ~/.docker/ && \
-          echo '{"experimental": "enabled"}' > ~/.docker/config.json
+          mkdir -p ~/.docker/
+          if [ -f ~/.docker/config.json ]; then
+            jq '.experimental = "enabled"' ~/.docker/config.json > tmp.json && mv tmp.json ~/.docker/config.json
+          else
+            echo '{"experimental": "enabled"}' > ~/.docker/config.json
+          fi
       - name: Create manifest for version
         run: |
           export DH_TAG=$(git tag --points-at HEAD | sed 's/^v*//')
