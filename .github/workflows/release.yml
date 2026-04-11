@@ -77,7 +77,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GHCR
-        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc #v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -114,16 +114,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build
-        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a #v6.4.0
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           version: v2.15.2
-          args: release --clean --config .goreleaser.yml --debug
+          args: release --clean --config .goreleaser.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Enable experimental docker features
         run: |
-          mkdir -p ~/.docker/ && \
-          echo '{"experimental": "enabled"}' > ~/.docker/config.json
+          mkdir -p ~/.docker/
+          if [ -f ~/.docker/config.json ]; then
+            jq '.experimental = "enabled"' ~/.docker/config.json > tmp.json && mv tmp.json ~/.docker/config.json
+          else
+            echo '{"experimental": "enabled"}' > ~/.docker/config.json
+          fi
       - name: Create manifest for version
         run: |
           export DH_TAG=$(git tag --points-at HEAD | sed 's/^v*//')
@@ -221,8 +225,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Pull new module version
-      uses: andrewslotin/go-proxy-pull-action@50fea06a976087614babb9508e5c528b464f4645 #master@2022-10-14
-
+      run: curl -s https://proxy.golang.org/github.com/fugginold/dockwatch/@v/${{ github.ref_name }}.info
   
   
 

@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased - 2026-04-07
+## 0.2.0 - 2026-04-11
 
-- No unreleased changes yet.
+### Added
+
+- Added an interactive shell interface that automatically activates when Dockwatch operates within a TTY environment.
+- Supported runtime `schedule` and `update` commands directly inside the interactive `dockwatch>` shell.
 
 ---
 
