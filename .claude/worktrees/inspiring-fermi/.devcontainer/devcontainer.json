@@ -1,0 +1,43 @@
+{
+  "name": "dockwatch-dev",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [8080, 3000, 9090],
+  "portsAttributes": {
+    "8080": {
+      "label": "Dockwatch API"
+    },
+    "3000": {
+      "label": "Grafana"
+    },
+    "9090": {
+      "label": "Prometheus"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.testFlags": [
+          "-count=1"
+        ],
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "golang.Go",
+        "ms-azuretools.vscode-docker",
+        "github.vscode-pull-request-github",
+        "github.copilot"
+      ]
+    }
+  },
+  "postCreateCommand": "go mod download",
+  "postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+  "remoteUser": "vscode"
+}

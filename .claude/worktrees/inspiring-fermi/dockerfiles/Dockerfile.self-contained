@@ -1,0 +1,40 @@
+#
+# Builder
+#
+
+FROM golang:alpine AS builder
+
+# use version (for example "v0.3.3") or "main"
+ARG DOCKWATCH_VERSION=main
+
+RUN apk add --no-cache \
+    alpine-sdk \
+    ca-certificates \
+    git \
+    tzdata
+
+RUN git clone --branch "${DOCKWATCH_VERSION}" https://github.com/fugginold/dockwatch.git
+
+RUN \
+  cd dockwatch && \
+  \
+  GO111MODULE=on CGO_ENABLED=0 GOOS=linux go build -a -ldflags "-extldflags '-static' -X github.com/fugginold/dockwatch/internal/meta.Version=$(git describe --tags)" . && \
+  GO111MODULE=on go test ./... -v
+
+
+#
+# dockwatch
+#
+
+FROM scratch
+
+LABEL "com.centurylinklabs.dockwatch"="true"
+
+# copy files from other container
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /go/dockwatch/dockwatch /dockwatch
+
+HEALTHCHECK CMD [ "/dockwatch", "--health-check"]
+
+ENTRYPOINT ["/dockwatch"]

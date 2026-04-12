@@ -1,0 +1,30 @@
+dockers:
+  - image_templates:
+      - "fugginold/dockwatch:{{ .Tag }}-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    goos: linux
+    goarch: amd64
+
+  - image_templates:
+      - "fugginold/dockwatch:{{ .Tag }}-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    goos: linux
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "fugginold/dockwatch:{{ .Tag }}"
+    image_templates:
+      - "fugginold/dockwatch:{{ .Tag }}-amd64"
+      - "fugginold/dockwatch:{{ .Tag }}-arm64"
+
+  - name_template: "fugginold/dockwatch:latest"
+    image_templates:
+      - "fugginold/dockwatch:{{ .Tag }}-amd64"
+      - "fugginold/dockwatch:{{ .Tag }}-arm64"
+
+  - name_template: "fugginold/dockwatch:stable"
+    image_templates:
+      - "fugginold/dockwatch:{{ .Tag }}-amd64"
+      - "fugginold/dockwatch:{{ .Tag }}-arm64"

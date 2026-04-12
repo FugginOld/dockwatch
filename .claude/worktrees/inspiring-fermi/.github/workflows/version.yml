@@ -1,0 +1,33 @@
+name: Auto Version
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: version
+        uses: paulhatch/semantic-version@v4
+        with:
+          tag_prefix: "v"
+          major_pattern: "feat!:"
+          minor_pattern: "feat:"
+          patch_pattern: "fix:"
+          default_bump: patch
+
+      - name: Create tag
+        run: |
+          echo "Tagging ${{ steps.version.outputs.version_tag }}"
+          git tag ${{ steps.version.outputs.version_tag }}
+          git push origin ${{ steps.version.outputs.version_tag }}

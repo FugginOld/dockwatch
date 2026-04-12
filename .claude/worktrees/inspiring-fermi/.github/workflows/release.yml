@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  docker:
+    name: docker
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22
+
+      # Build binary
+      - name: Build app
+        run: go build -o dockwatch
+
+      # Build local image
+      - name: Build Docker image (test)
+        run: docker build -t dockwatch:test .
+
+      # Health test container
+      - name: Test container
+        run: |
+          chmod +x .github/scripts/test-container.sh
+          .github/scripts/test-container.sh dockwatch:test
+
+      # Only release if container is healthy
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Update rollback pointer
+      - name: Update stable tag
+        run: |
+          git tag -f stable
+          git push origin stable --force
