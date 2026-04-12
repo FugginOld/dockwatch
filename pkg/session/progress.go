@@ -50,6 +50,15 @@ func (m Progress) MarkForUpdate(containerID types.ContainerID) {
 	m[containerID].state = UpdatedState
 }
 
+// MarkSkipped marks a container that was queued for update as intentionally skipped.
+// Used when a pre-update lifecycle hook defers the update via EX_TEMPFAIL.
+func (m Progress) MarkSkipped(id types.ContainerID, err error) {
+	if update, ok := m[id]; ok {
+		update.error = err
+		update.state = SkippedState
+	}
+}
+
 // Report creates a new Report from a Progress instance
 func (m Progress) Report() types.Report {
 	return NewReport(m)

@@ -230,6 +230,19 @@ func KillContainerHandler(containerID string, found FoundStatus) http.HandlerFun
 	)
 }
 
+// WaitContainerHandler mocks the POST containers/{id}/wait endpoint used by ContainerWait.
+// When found is Missing it returns 404, which the client treats as "already gone" (no error).
+func WaitContainerHandler(containerID string, found FoundStatus) http.HandlerFunc {
+	responseHandler := ghttp.RespondWithJSONEncoded(http.StatusOK, map[string]interface{}{"StatusCode": 0})
+	if !found {
+		responseHandler = containerNotFoundResponse(containerID)
+	}
+	return ghttp.CombineHandlers(
+		ghttp.VerifyRequest("POST", O.HaveSuffix("containers/%s/wait", containerID)),
+		responseHandler,
+	)
+}
+
 // RemoveContainerHandler mocks the DELETE containers/{id} endpoint
 func RemoveContainerHandler(containerID string, found FoundStatus) http.HandlerFunc {
 	responseHandler := noContentStatusResponse

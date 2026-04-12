@@ -12,6 +12,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// errLifecycleSkip is returned by stopStaleContainer when a pre-update lifecycle hook
+// intentionally defers the update by exiting with code 75 (EX_TEMPFAIL).
+var errLifecycleSkip = errors.New("container update deferred by pre-update lifecycle hook (EX_TEMPFAIL)")
+
 // Update looks at the running Docker containers to see if any of the images
 // used to start those containers have been updated. If a change is detected in
 // any of the images, the associated containers are stopped and restarted with
@@ -34,8 +38,8 @@ func Update(client container.Client, params types.UpdateParams) (types.Report, e
 
 	for i, targetContainer := range containers {
 		stale, newestImage, err := client.IsContainerStale(targetContainer, params)
-		shouldUpdate := stale && !params.NoRestart && !targetContainer.IsMonitorOnly(params)
-		if err == nil && shouldUpdate {
+		needsVerification := stale && !params.NoRestart && !targetContainer.IsMonitorOnly(params)
+		if err == nil && needsVerification {
 			// Check to make sure we have all the necessary information for recreating the container
 			err = targetContainer.VerifyConfiguration()
 			// If the image information is incomplete and trace logging is enabled, log it for further diagnosis
@@ -80,9 +84,12 @@ func Update(client container.Client, params types.UpdateParams) (types.Report, e
 	}
 
 	if params.RollingRestart {
-		progress.UpdateFailed(performRollingRestart(containersToUpdate, client, params))
+		failed := performRollingRestart(containersToUpdate, client, params)
+		separateLifecycleSkips(&progress, failed)
+		progress.UpdateFailed(failed)
 	} else {
 		failedStop, stoppedImages := stopContainersInReversedOrder(containersToUpdate, client, params)
+		separateLifecycleSkips(&progress, failedStop)
 		progress.UpdateFailed(failedStop)
 		failedStart := restartContainersInSortedOrder(containersToUpdate, client, params, stoppedImages)
 		progress.UpdateFailed(failedStart)
@@ -161,7 +168,7 @@ func stopStaleContainer(container types.Container, client container.Client, para
 		}
 		if skipUpdate {
 			log.Debug("Skipping container as the pre-update command returned exit code 75 (EX_TEMPFAIL)")
-			return errors.New("skipping container as the pre-update command returned exit code 75 (EX_TEMPFAIL)")
+			return errLifecycleSkip
 		}
 	}
 
@@ -250,6 +257,17 @@ func UpdateImplicitRestart(containers []types.Container) {
 			containers[ci].SetLinkedToRestarting(true)
 		}
 
+	}
+}
+
+// separateLifecycleSkips moves containers that were intentionally deferred via EX_TEMPFAIL
+// from the failed map into the progress skipped state, so they don't inflate failure counts.
+func separateLifecycleSkips(progress *session.Progress, failed map[types.ContainerID]error) {
+	for id, err := range failed {
+		if errors.Is(err, errLifecycleSkip) {
+			progress.MarkSkipped(id, err)
+			delete(failed, id)
+		}
 	}
 }
 

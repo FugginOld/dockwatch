@@ -25,6 +25,7 @@ const defaultStopSignal = "SIGTERM"
 // A Client is the interface through which dockwatch interacts with the
 // Docker API.
 type Client interface {
+	Ping() error
 	ListContainers(t.Filter) ([]t.Container, error)
 	GetContainer(containerID t.ContainerID) (t.Container, error)
 	StopContainer(t.Container, time.Duration) error
@@ -89,6 +90,11 @@ func (client dockerClient) WarnOnHeadPullFailed(container t.Container) bool {
 	}
 
 	return registry.WarnOnAPIConsumption(container)
+}
+
+func (client dockerClient) Ping() error {
+	_, err := client.api.Ping(context.Background())
+	return err
 }
 
 func (client dockerClient) ListContainers(fn t.Filter) ([]t.Container, error) {
@@ -197,8 +203,9 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 		}
 	}
 
-	// TODO: This should probably be checked.
-	_ = client.waitForStopOrTimeout(c, timeout)
+	if err := client.waitForContainerStop(c, timeout); err != nil {
+		log.Warnf("Failed to confirm container %s stopped: %v", shortID, err)
+	}
 
 	if c.ContainerInfo().HostConfig.AutoRemove {
 		log.Debugf("AutoRemove container %s, skipping ContainerRemove call.", shortID)
@@ -212,11 +219,10 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 			}
 			return err
 		}
-	}
 
-	// Wait for container to be removed. In this case an error is a good thing
-	if err := client.waitForStopOrTimeout(c, timeout); err == nil {
-		return fmt.Errorf("container %s (%s) could not be removed", c.Name(), shortID)
+		if err := client.waitForContainerRemoval(c, timeout); err != nil {
+			return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
+		}
 	}
 
 	return nil
@@ -530,21 +536,41 @@ func (client dockerClient) waitForExecOrTimeout(bg context.Context, ID string, e
 	return false, nil
 }
 
-func (client dockerClient) waitForStopOrTimeout(c t.Container, waitTime time.Duration) error {
-	bg := context.Background()
-	timeout := time.After(waitTime)
+func (client dockerClient) waitForContainerStop(c t.Container, waitTime time.Duration) error {
+	if waitTime <= 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	defer cancel()
 
-	for {
-		select {
-		case <-timeout:
+	waitCh, errCh := client.api.ContainerWait(ctx, string(c.ID()), container.WaitConditionNotRunning)
+	select {
+	case <-waitCh:
+		return nil
+	case err := <-errCh:
+		if sdkClient.IsErrNotFound(err) {
 			return nil
-		default:
-			if ci, err := client.api.ContainerInspect(bg, string(c.ID())); err != nil {
-				return err
-			} else if !ci.State.Running {
-				return nil
-			}
 		}
-		time.Sleep(1 * time.Second)
+		return err
+	}
+}
+
+func (client dockerClient) waitForContainerRemoval(c t.Container, waitTime time.Duration) error {
+	if waitTime <= 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	defer cancel()
+
+	waitCh, errCh := client.api.ContainerWait(ctx, string(c.ID()), container.WaitConditionRemoved)
+	select {
+	case <-waitCh:
+		return nil
+	case err := <-errCh:
+		if sdkClient.IsErrNotFound(err) {
+			// Container already gone — that's the desired outcome
+			return nil
+		}
+		return err
 	}
 }
