@@ -1,232 +1,66 @@
-name: Release (Production)
+name: Release
 
 on:
-  workflow_dispatch: {}
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - '**/v[0-9]+.[0-9]+.[0-9]+'
+      - "v*"
 
 jobs:
-  lint:
-    name: Lint
+  docker:
+    name: docker
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.25.x
-      - uses: dominikh/staticcheck-action@ba605356b4b29a60e87ab9404b712f3461e566dc #v1.3.0
-        with:
-          version: "latest"
-          install-go: "false"
-          checks: "all,-SA1019,-ST*"
 
-  test:
-    name: Test
-    strategy:
-      matrix:
-        go-version:
-          - 1.25.x
-        platform:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.25.x
-      - name: Run tests
-        run: |
-          go test ./... -coverprofile coverage.out
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: 
-      - test
-      - lint
     permissions:
       contents: write
       packages: write
-    env:
-      CGO_ENABLED: 0
-      TAG: ${{ github.ref_name }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.25.x
-      - name: Login to Docker Hub
-        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc #v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Login to GHCR
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Delete existing release assets
-        run: |
-          if [ "${GITHUB_REF_TYPE}" != "tag" ] || [[ "${GITHUB_REF}" != refs/tags/* ]]; then
-            echo "Current ref '${GITHUB_REF}' is not a tag ref; skipping release asset cleanup."
-            exit 0
-          fi
-          TAG="${GITHUB_REF_NAME}"
-          ASSETS=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --json assets --jq '.assets[].name' 2>&1) && HAS_RELEASE=true || HAS_RELEASE=false
-          if [ "$HAS_RELEASE" = "false" ]; then
-            echo "No existing release found for $TAG (or gh failed: $ASSETS) – nothing to clean up."
-          elif [ -z "$ASSETS" ]; then
-            echo "Release $TAG exists but has no assets – nothing to clean up."
-          else
-            echo "Release $TAG found – deleting expected GoReleaser assets before re-upload..."
-            echo "$ASSETS" | while IFS= read -r asset; do
-              case "$asset" in
-                dockwatch_*)
-                  echo "Deleting GoReleaser asset: $asset"
-                  ERR=$(gh release delete-asset "$TAG" "$asset" --yes \
-                    --repo "$GITHUB_REPOSITORY" 2>&1) || \
-                    echo "Warning: could not delete '$asset': $ERR"
-                  ;;
-                *)
-                  echo "Skipping non-GoReleaser asset: $asset"
-                  ;;
-              esac
-            done
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build
-        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          version: v2.15.2
-          args: release --clean --config .goreleaser.yml
+          go-version: 1.22
+
+      # Build binary
+      - name: Build app
+        run: go build -o dockwatch
+
+      # Build local image
+      - name: Build Docker image (test)
+        run: docker build -t dockwatch:test .
+
+      # Health test container
+      - name: Test container
+        run: |
+          chmod +x .github/scripts/test-container.sh
+          .github/scripts/test-container.sh dockwatch:test
+
+      # Only release if container is healthy
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Enable experimental docker features
-        run: |
-          mkdir -p ~/.docker/
-          if [ -f ~/.docker/config.json ]; then
-            jq '.experimental = "enabled"' ~/.docker/config.json > tmp.json && mv tmp.json ~/.docker/config.json
-          else
-            echo '{"experimental": "enabled"}' > ~/.docker/config.json
-          fi
-      - name: Create manifest for version
-        run: |
-          export DH_TAG=$(git tag --points-at HEAD | sed 's/^v*//')
-          docker manifest create \
-            fugginold/dockwatch:$DH_TAG \
-            fugginold/dockwatch:amd64-$DH_TAG \
-            fugginold/dockwatch:i386-$DH_TAG \
-            fugginold/dockwatch:armhf-$DH_TAG \
-            fugginold/dockwatch:arm64v8-$DH_TAG
-          docker manifest create \
-            ghcr.io/fugginold/dockwatch:$DH_TAG \
-            ghcr.io/fugginold/dockwatch:amd64-$DH_TAG \
-            ghcr.io/fugginold/dockwatch:i386-$DH_TAG \
-            ghcr.io/fugginold/dockwatch:armhf-$DH_TAG \
-            ghcr.io/fugginold/dockwatch:arm64v8-$DH_TAG
-      - name: Annotate manifest for version
-        run: |
-          for REPO in '' ghcr.io/ ; do
-          
-          docker manifest annotate \
-            ${REPO}fugginold/dockwatch:$(echo $TAG | sed 's/^v*//') \
-            ${REPO}fugginold/dockwatch:i386-$(echo $TAG | sed 's/^v*//') \
-            --os linux \
-            --arch 386
-          
-          docker manifest annotate \
-            ${REPO}fugginold/dockwatch:$(echo $TAG | sed 's/^v*//') \
-            ${REPO}fugginold/dockwatch:armhf-$(echo $TAG | sed 's/^v*//') \
-            --os linux \
-            --arch arm
-      
-          docker manifest annotate \
-            ${REPO}fugginold/dockwatch:$(echo $TAG | sed 's/^v*//') \
-            ${REPO}fugginold/dockwatch:arm64v8-$(echo $TAG | sed 's/^v*//') \
-            --os linux \
-            --arch arm64 \
-            --variant v8
-            
-            done
-      - name: Create manifest for latest
-        run: |
-          docker manifest create \
-            fugginold/dockwatch:latest \
-            fugginold/dockwatch:amd64-latest \
-            fugginold/dockwatch:i386-latest \
-            fugginold/dockwatch:armhf-latest \
-            fugginold/dockwatch:arm64v8-latest
-          docker manifest create \
-            ghcr.io/fugginold/dockwatch:latest \
-            ghcr.io/fugginold/dockwatch:amd64-latest \
-            ghcr.io/fugginold/dockwatch:i386-latest \
-            ghcr.io/fugginold/dockwatch:armhf-latest \
-            ghcr.io/fugginold/dockwatch:arm64v8-latest
-      - name: Annotate manifest for latest
-        run: |
-          for REPO in '' ghcr.io/ ; do
 
-          docker manifest annotate \
-            ${REPO}fugginold/dockwatch:latest \
-            ${REPO}fugginold/dockwatch:i386-latest \
-            --os linux \
-            --arch 386
-      
-          docker manifest annotate \
-            ${REPO}fugginold/dockwatch:latest \
-            ${REPO}fugginold/dockwatch:armhf-latest \
-            --os linux \
-            --arch arm
-            
-          docker manifest annotate \
-            ${REPO}fugginold/dockwatch:latest \
-            ${REPO}fugginold/dockwatch:arm64v8-latest \
-            --os linux \
-            --arch arm64 \
-            --variant v8
-
-          done
-      - name: Push manifests to Dockerhub
-        env:
-          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Update rollback pointer
+      - name: Update stable tag
         run: |
-          docker login -u $DOCKER_USER -p $DOCKER_TOKEN && \
-            docker manifest push fugginold/dockwatch:$(echo $TAG | sed 's/^v*//') && \
-            docker manifest push fugginold/dockwatch:latest
-      - name: Push manifests to GitHub Container Registry
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker manifest push ghcr.io/fugginold/dockwatch:$(echo $TAG | sed 's/^v*//')
-          docker manifest push ghcr.io/fugginold/dockwatch:latest
-
-  renew-docs:
-    name: Refresh pkg.go.dev
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-    - name: Pull new module version
-      run: curl -s https://proxy.golang.org/github.com/fugginold/dockwatch/@v/${{ github.ref_name }}.info
-  
-  
-
-  
+          git tag -f stable
+          git push origin stable --force
