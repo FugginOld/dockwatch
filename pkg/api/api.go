@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/hmac"
 	"errors"
 	"fmt"
 	"net/http"
@@ -31,7 +32,7 @@ func (api *API) RequireToken(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		want := fmt.Sprintf("Bearer %s", api.Token)
-		if auth != want {
+		if !hmac.Equal([]byte(auth), []byte(want)) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -77,5 +78,6 @@ func (api *API) Start(block bool) error {
 }
 
 func (api *API) runHTTPServer() error {
+	log.Warn("HTTP API is running without TLS. Ensure this endpoint is behind a TLS-terminating proxy in production.")
 	return http.ListenAndServe(":8080", api.mux)
 }

@@ -81,14 +81,13 @@ var _ = Describe("the client", func() {
 		When("the container still exist after stopping", func() {
 			It("should attempt to remove the container", func() {
 				container := MockContainer(WithContainerState(types.ContainerState{Running: true}))
-				containerStopped := MockContainer(WithContainerState(types.ContainerState{Running: false}))
 
 				cid := container.ContainerInfo().ID
 				mockServer.AppendHandlers(
 					mocks.KillContainerHandler(cid, mocks.Found),
-					mocks.GetContainerHandler(cid, containerStopped.ContainerInfo()),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
 					mocks.RemoveContainerHandler(cid, mocks.Found),
-					mocks.GetContainerHandler(cid, nil),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerRemoval
 				)
 
 				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
@@ -101,7 +100,7 @@ var _ = Describe("the client", func() {
 				cid := container.ContainerInfo().ID
 				mockServer.AppendHandlers(
 					mocks.KillContainerHandler(cid, mocks.Found),
-					mocks.GetContainerHandler(cid, nil),
+					mocks.WaitContainerHandler(cid, mocks.Missing), // waitForContainerStop: 404 treated as nil
 					mocks.RemoveContainerHandler(cid, mocks.Missing),
 				)
 

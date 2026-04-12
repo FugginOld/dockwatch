@@ -37,6 +37,11 @@ func CreateMockClient(data *TestData, pullImages bool, removeVolumes bool) MockC
 	}
 }
 
+// Ping is a mock method that always succeeds
+func (client MockClient) Ping() error {
+	return nil
+}
+
 // ListContainers is a mock method returning the provided container testdata
 func (client MockClient) ListContainers(_ t.Filter) ([]t.Container, error) {
 	return client.TestData.Containers, nil

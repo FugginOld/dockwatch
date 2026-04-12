@@ -29,7 +29,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
+// runConfig holds all runtime configuration populated during PreRun.
+// Consolidating these into a struct avoids package-level mutable state.
+type runConfig struct {
 	client            container.Client
 	scheduleSpec      string
 	cleanup           bool
@@ -43,7 +45,9 @@ var (
 	rollingRestart    bool
 	scope             string
 	labelPrecedence   bool
-)
+}
+
+var cfg runConfig
 
 var rootCmd = NewRootCommand()
 
@@ -83,28 +87,28 @@ func PreRun(cmd *cobra.Command, _ []string) {
 		log.Fatalf("Failed to initialize logging: %s", err.Error())
 	}
 
-	scheduleSpec, _ = f.GetString("schedule")
+	cfg.scheduleSpec, _ = f.GetString("schedule")
 
 	flags.GetSecretsFromFiles(cmd)
 	rf := flags.ReadFlags(cmd)
-	cleanup = rf.Cleanup
-	noRestart = rf.NoRestart
-	monitorOnly = rf.MonitorOnly
-	timeout = rf.Timeout
+	cfg.cleanup = rf.Cleanup
+	cfg.noRestart = rf.NoRestart
+	cfg.monitorOnly = rf.MonitorOnly
+	cfg.timeout = rf.Timeout
 
-	if timeout < 0 {
+	if cfg.timeout < 0 {
 		log.Fatal("Please specify a positive value for timeout value.")
 	}
 
-	enableLabel, _ = f.GetBool("label-enable")
-	disableContainers, _ = f.GetStringSlice("disable-containers")
-	lifecycleHooks, _ = f.GetBool("enable-lifecycle-hooks")
-	rollingRestart, _ = f.GetBool("rolling-restart")
-	scope, _ = f.GetString("scope")
-	labelPrecedence, _ = f.GetBool("label-take-precedence")
+	cfg.enableLabel, _ = f.GetBool("label-enable")
+	cfg.disableContainers, _ = f.GetStringSlice("disable-containers")
+	cfg.lifecycleHooks, _ = f.GetBool("enable-lifecycle-hooks")
+	cfg.rollingRestart, _ = f.GetBool("rolling-restart")
+	cfg.scope, _ = f.GetString("scope")
+	cfg.labelPrecedence, _ = f.GetBool("label-take-precedence")
 
-	if scope != "" {
-		log.Debugf(`Using scope %q`, scope)
+	if cfg.scope != "" {
+		log.Debugf(`Using scope %q`, cfg.scope)
 	}
 
 	// configure environment vars for client
@@ -113,18 +117,18 @@ func PreRun(cmd *cobra.Command, _ []string) {
 		log.Fatal(err)
 	}
 
-	noPull, _ = f.GetBool("no-pull")
+	cfg.noPull, _ = f.GetBool("no-pull")
 	includeStopped, _ := f.GetBool("include-stopped")
 	includeRestarting, _ := f.GetBool("include-restarting")
 	reviveStopped, _ := f.GetBool("revive-stopped")
 	removeVolumes, _ := f.GetBool("remove-volumes")
 	warnOnHeadPullFailed, _ := f.GetString("warn-on-head-failure")
 
-	if monitorOnly && noPull {
+	if cfg.monitorOnly && cfg.noPull {
 		log.Warn("Using `DOCKWATCH_NO_PULL` and `DOCKWATCH_MONITOR_ONLY` simultaneously might lead to no action being taken at all. If this is intentional, you may safely ignore this message.")
 	}
 
-	client, err = container.NewClient(container.ClientOptions{
+	cfg.client, err = container.NewClient(container.ClientOptions{
 		IncludeStopped:    includeStopped,
 		ReviveStopped:     reviveStopped,
 		RemoveVolumes:     removeVolumes,
@@ -134,12 +138,11 @@ func PreRun(cmd *cobra.Command, _ []string) {
 	if err != nil {
 		log.Fatalf("Error instantiating Docker client: %s", err)
 	}
-
 }
 
 // Run is the main execution flow of the command
 func Run(c *cobra.Command, names []string) {
-	filter, filterDesc := filters.BuildFilter(names, disableContainers, enableLabel, scope)
+	filter, filterDesc := filters.BuildFilter(names, cfg.disableContainers, cfg.enableLabel, cfg.scope)
 	runOnce, _ := c.PersistentFlags().GetBool("run-once")
 	forceUpdate, _ := c.PersistentFlags().GetBool("force-update")
 	enableUpdateAPI, _ := c.PersistentFlags().GetBool("http-api-update")
@@ -161,13 +164,13 @@ func Run(c *cobra.Command, names []string) {
 		os.Exit(0)
 	}
 
-	if rollingRestart && monitorOnly {
+	if cfg.rollingRestart && cfg.monitorOnly {
 		log.Fatal("Rolling restarts is not compatible with the global monitor only flag")
 	}
 
-	awaitDockerClient()
+	awaitDockerClient(cfg.client)
 
-	if err := actions.CheckForSanity(client, filter, rollingRestart); err != nil {
+	if err := actions.CheckForSanity(cfg.client, filter, cfg.rollingRestart); err != nil {
 		logNotifyExit(err)
 	}
 
@@ -178,7 +181,7 @@ func Run(c *cobra.Command, names []string) {
 		return
 	}
 
-	if err := actions.CheckForMultipleDockwatchInstances(client, cleanup, scope); err != nil {
+	if err := actions.CheckForMultipleDockwatchInstances(cfg.client, cfg.cleanup, cfg.scope); err != nil {
 		logNotifyExit(err)
 	}
 
@@ -194,7 +197,7 @@ func Run(c *cobra.Command, names []string) {
 	if periodicEnabled || isInteractive {
 		scheduleCtrl = newScheduleController(updateLock, filter)
 		if periodicEnabled {
-			nextRun, err := scheduleCtrl.Set(scheduleSpec)
+			nextRun, err := scheduleCtrl.Set(cfg.scheduleSpec)
 			if err != nil {
 				log.Error(err)
 				os.Exit(1)
@@ -255,7 +258,7 @@ func Run(c *cobra.Command, names []string) {
 		<-updateLock
 	}
 
-	os.Exit(1)
+	os.Exit(0) // clean shutdown
 }
 
 func logNotifyExit(err error) {
@@ -263,9 +266,18 @@ func logNotifyExit(err error) {
 	os.Exit(1)
 }
 
-func awaitDockerClient() {
-	log.Debug("Sleeping for a second to ensure the docker api client has been properly initialized.")
-	time.Sleep(1 * time.Second)
+// awaitDockerClient retries Ping until the Docker API is reachable, failing
+// fatally after 5 attempts. This replaces a fixed 1-second sleep that could
+// succeed before Docker was ready or fail silently when it wasn't.
+func awaitDockerClient(client container.Client) {
+	for attempt := 1; attempt <= 5; attempt++ {
+		if err := client.Ping(); err == nil {
+			return
+		}
+		log.Debugf("Docker API not yet available (attempt %d/5), retrying in 1s...", attempt)
+		time.Sleep(1 * time.Second)
+	}
+	log.Fatal("Docker API unreachable after 5 attempts")
 }
 
 func formatDuration(d time.Duration) string {
@@ -394,7 +406,6 @@ func (c *scheduleController) Set(spec string) (time.Time, error) {
 
 	c.scheduler = scheduler
 	c.spec = spec
-	scheduleSpec = spec
 
 	return nextRun, nil
 }
@@ -429,16 +440,16 @@ func (c *scheduleController) Stop() {
 func runUpdates(filter t.Filter) *metrics.Metric {
 	updateParams := t.UpdateParams{
 		Filter:          filter,
-		Cleanup:         cleanup,
-		NoRestart:       noRestart,
-		Timeout:         timeout,
-		MonitorOnly:     monitorOnly,
-		LifecycleHooks:  lifecycleHooks,
-		RollingRestart:  rollingRestart,
-		LabelPrecedence: labelPrecedence,
-		NoPull:          noPull,
+		Cleanup:         cfg.cleanup,
+		NoRestart:       cfg.noRestart,
+		Timeout:         cfg.timeout,
+		MonitorOnly:     cfg.monitorOnly,
+		LifecycleHooks:  cfg.lifecycleHooks,
+		RollingRestart:  cfg.rollingRestart,
+		LabelPrecedence: cfg.labelPrecedence,
+		NoPull:          cfg.noPull,
 	}
-	result, err := actions.Update(client, updateParams)
+	result, err := actions.Update(cfg.client, updateParams)
 	if err != nil {
 		log.Error(err)
 	}
