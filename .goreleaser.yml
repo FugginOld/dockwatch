@@ -34,10 +34,9 @@ dockers:
       - "fugginold/dockwatch:stable"
     dockerfile: Dockerfile
     use: buildx
-    goos: linux
-    goarch:
-      - amd64
-      - arm64
+    platforms:
+      - linux/amd64
+      - linux/arm64
 
 release:
   prerelease: auto
