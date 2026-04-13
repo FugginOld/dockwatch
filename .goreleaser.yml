@@ -28,3 +28,8 @@ docker_manifests:
     image_templates:
       - "fugginold/dockwatch:{{ .Tag }}-amd64"
       - "fugginold/dockwatch:{{ .Tag }}-arm64"
+release:
+  draft: false
+  prerelease: false
+  # Remove the next line if you want to auto-generate release notes
+  # note: ""
