@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
@@ -77,7 +78,7 @@ const (
 )
 
 type dockerClient struct {
-	api sdkClient.CommonAPIClient
+	api sdkClient.APIClient
 	ClientOptions
 }
 
@@ -177,7 +178,7 @@ func (client dockerClient) GetContainer(containerID t.ContainerID) (t.Container,
 		}
 	}
 
-	imageInfo, _, err := client.api.ImageInspectWithRaw(bg, containerInfo.Image)
+	imageInfo, err := client.api.ImageInspect(bg, containerInfo.Image)
 	if err != nil {
 		log.Warnf("Failed to retrieve container image info: %v", err)
 		return &Container{containerInfo: &containerInfo, imageInfo: nil}, nil
@@ -213,7 +214,7 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 		log.Debugf("Removing container %s", shortID)
 
 		if err := client.api.ContainerRemove(bg, idStr, container.RemoveOptions{Force: true, RemoveVolumes: client.RemoveVolumes}); err != nil {
-			if sdkClient.IsErrNotFound(err) {
+			if cerrdefs.IsNotFound(err) {
 				log.Debugf("Container %s not found, skipping removal.", shortID)
 				return nil
 			}
@@ -330,7 +331,7 @@ func (client dockerClient) HasNewImage(ctx context.Context, container t.Containe
 	currentImageID := t.ImageID(container.ContainerInfo().ContainerJSONBase.Image)
 	imageName := container.ImageName()
 
-	newImageInfo, _, err := client.api.ImageInspectWithRaw(ctx, imageName)
+	newImageInfo, err := client.api.ImageInspect(ctx, imageName)
 	if err != nil {
 		return false, currentImageID, err
 	}
@@ -548,7 +549,7 @@ func (client dockerClient) waitForContainerStop(c t.Container, waitTime time.Dur
 	case <-waitCh:
 		return nil
 	case err := <-errCh:
-		if sdkClient.IsErrNotFound(err) {
+		if cerrdefs.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -567,7 +568,7 @@ func (client dockerClient) waitForContainerRemoval(c t.Container, waitTime time.
 	case <-waitCh:
 		return nil
 	case err := <-errCh:
-		if sdkClient.IsErrNotFound(err) {
+		if cerrdefs.IsNotFound(err) {
 			// Container already gone — that's the desired outcome
 			return nil
 		}
