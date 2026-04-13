@@ -1,17 +1,19 @@
 FROM alpine:latest
 
+ARG TARGETPLATFORM
+
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-# Copy prebuilt binary from GoReleaser
-COPY dockwatch .
+# Copy prebuilt binary from GoReleaser (organized by platform by dockers_v2)
+COPY ${TARGETPLATFORM}/dockwatch .
 
 # Ensure executable
 RUN chmod +x dockwatch
 
-# Safe health check (won’t fail build if pgrep missing)
+# Safe health check (won't fail build if pgrep missing)
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
   CMD pgrep dockwatch || exit 0
 
