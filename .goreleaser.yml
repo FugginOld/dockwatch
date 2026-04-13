@@ -13,6 +13,12 @@ dockers:
     goos: linux
     goarch: arm64
 
+registries:
+  - name: dockerhub
+    url: https://index.docker.io/v1/
+    username: ${{ secrets.DOCKERHUB_USERNAME }}
+    password: ${{ secrets.DOCKERHUB_TOKEN }}
+
 docker_manifests:
   - name_template: "fugginold/dockwatch:{{ .Tag }}"
     image_templates:
