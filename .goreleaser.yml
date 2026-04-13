@@ -22,49 +22,28 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
 
 checksum:
   name_template: "checksums.txt"
 
-dockers:
-  - image_templates:
-      - "fugginold/dockwatch:{{ .Tag }}-amd64"
-    dockerfile: Dockerfile
-    use: buildx
-    goos: linux
-    goarch: amd64
-    build_flag_templates:
-      - "--platform=linux/amd64"
-
-  - image_templates:
-      - "fugginold/dockwatch:{{ .Tag }}-arm64"
-    dockerfile: Dockerfile
-    use: buildx
-    goos: linux
-    goarch: arm64
-    build_flag_templates:
-      - "--platform=linux/arm64"
-
-docker_manifests:
-  - name_template: "fugginold/dockwatch:{{ .Tag }}"
-    image_templates:
-      - "fugginold/dockwatch:{{ .Tag }}-amd64"
-      - "fugginold/dockwatch:{{ .Tag }}-arm64"
-
-  - name_template: "fugginold/dockwatch:latest"
-    image_templates:
-      - "fugginold/dockwatch:{{ .Tag }}-amd64"
-      - "fugginold/dockwatch:{{ .Tag }}-arm64"
-
-  - name_template: "fugginold/dockwatch:stable"
-    image_templates:
-      - "fugginold/dockwatch:{{ .Tag }}-amd64"
-      - "fugginold/dockwatch:{{ .Tag }}-arm64"
+dockers_v2:
+  - dockerfile: Dockerfile
+    images:
+      - "fugginold/dockwatch"
+    tags:
+      - "{{ .Tag }}"
+      - latest
+      - stable
+    platforms:
+      - linux/amd64
+      - linux/arm64
 
 release:
   draft: false

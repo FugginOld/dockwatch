@@ -37,13 +37,16 @@ jobs:
         with:
           go-version: 1.22
 
-      # Build binary
+      # Build binary and stage it where dockers_v2 expects it
       - name: Build app
-        run: go build -o dockwatch
+        run: |
+          go build -o dockwatch
+          mkdir -p linux/amd64
+          cp dockwatch linux/amd64/dockwatch
 
       # Build local image
       - name: Build Docker image (test)
-        run: docker build -t dockwatch:test .
+        run: docker build --build-arg TARGETPLATFORM=linux/amd64 -t dockwatch:test .
 
       # Health test container
       - name: Test container
