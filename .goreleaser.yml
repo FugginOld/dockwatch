@@ -1,3 +1,5 @@
+version: 2
+
 dockers:
   - image_templates:
       - "fugginold/dockwatch:{{ .Tag }}-amd64"
