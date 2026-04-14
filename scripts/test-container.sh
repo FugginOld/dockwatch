@@ -5,7 +5,7 @@ IMAGE=$1
 
 echo "Running container test for $IMAGE..."
 
-docker run -d --name dockwatch-test $IMAGE
+docker run -d --name dockwatch-test -v /var/run/docker.sock:/var/run/docker.sock $IMAGE
 
 sleep 5
 
