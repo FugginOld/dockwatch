@@ -1,86 +1,106 @@
-build:
-  main: ./main.go
-  binary: dockwatch
-  goos:
-    - linux
-    - windows
-  goarch:
-    - amd64
-    - 386
-    - arm
-    - arm64
-  ldflags:
-    - -s -w -X github.com/fugginold/dockwatch/internal/meta.Version={{.Version}}
+version: 2
+
+builds:
+  - main: ./main.go
+    binary: dockwatch
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - "386"
+      - arm
+      - arm64
+    goarm:
+      - "6"
+    ldflags:
+      - -s -w -X github.com/fugginold/dockwatch/internal/meta.Version={{.Version}}
+
 archives:
-  - 
-    name_template: "{{.ProjectName}}_{{.Os}}_{{.Arch}}"
-    format: tar.gz
-    replacements:
-      arm: armhf
-      arm64: arm64v8
-      amd64: amd64
-      386: 386
-      darwin: macOS
-      linux: linux
+  - name_template: '{{ .ProjectName }}_{{ .Os }}_{{ if eq .Arch "arm" }}armhf{{ else if eq .Arch "arm64" }}arm64v8{{ else }}{{ .Arch }}{{ end }}'
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - LICENSE.md
+
 dockers:
-  -
-    use_buildx: true
-    build_flag_templates: [ "--platform=linux/amd64" ]
+  - use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
     goos: linux
     goarch: amd64
-    goarm: ''
     dockerfile: dockerfiles/Dockerfile
     image_templates:
-      - fugginold/dockwatch:amd64-{{ .Version }}
-      - fugginold/dockwatch:amd64-latest
-      - ghcr.io/fugginold/dockwatch:amd64-{{ .Version }}
-      - ghcr.io/fugginold/dockwatch:amd64-latest
-    binaries:
-      - dockwatch
-  - 
-    use_buildx: true
-    build_flag_templates: [ "--platform=linux/386" ]
+      - "fugginold/dockwatch:amd64-{{ .Version }}"
+      - "fugginold/dockwatch:amd64-latest"
+      - "ghcr.io/fugginold/dockwatch:amd64-{{ .Version }}"
+      - "ghcr.io/fugginold/dockwatch:amd64-latest"
+
+  - use: buildx
+    build_flag_templates:
+      - "--platform=linux/386"
     goos: linux
-    goarch: 386
-    goarm: ''
+    goarch: "386"
     dockerfile: dockerfiles/Dockerfile
     image_templates:
-      - fugginold/dockwatch:i386-{{ .Version }}
-      - fugginold/dockwatch:i386-latest
-      - ghcr.io/fugginold/dockwatch:i386-{{ .Version }}
-      - ghcr.io/fugginold/dockwatch:i386-latest
-    binaries:
-      - dockwatch
-  - 
-    use_buildx: true
-    build_flag_templates: [ "--platform=linux/arm/v6" ]
+      - "fugginold/dockwatch:i386-{{ .Version }}"
+      - "fugginold/dockwatch:i386-latest"
+      - "ghcr.io/fugginold/dockwatch:i386-{{ .Version }}"
+      - "ghcr.io/fugginold/dockwatch:i386-latest"
+
+  - use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm/v6"
     goos: linux
     goarch: arm
-    goarm: 6
+    goarm: "6"
     dockerfile: dockerfiles/Dockerfile
     image_templates:
-      - fugginold/dockwatch:armhf-{{ .Version }}
-      - fugginold/dockwatch:armhf-latest
-      - ghcr.io/fugginold/dockwatch:armhf-{{ .Version }}
-      - ghcr.io/fugginold/dockwatch:armhf-latest
-    binaries:
-      - dockwatch
-  - 
-    use_buildx: true
-    build_flag_templates: [ "--platform=linux/arm64/v8" ]
+      - "fugginold/dockwatch:armhf-{{ .Version }}"
+      - "fugginold/dockwatch:armhf-latest"
+      - "ghcr.io/fugginold/dockwatch:armhf-{{ .Version }}"
+      - "ghcr.io/fugginold/dockwatch:armhf-latest"
+
+  - use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64/v8"
     goos: linux
     goarch: arm64
-    goarm: ''
     dockerfile: dockerfiles/Dockerfile
     image_templates:
-      - fugginold/dockwatch:arm64v8-{{ .Version }}
-      - fugginold/dockwatch:arm64v8-latest
-      - ghcr.io/fugginold/dockwatch:arm64v8-{{ .Version }}
-      - ghcr.io/fugginold/dockwatch:arm64v8-latest
-    binaries:
-      - dockwatch
+      - "fugginold/dockwatch:arm64v8-{{ .Version }}"
+      - "fugginold/dockwatch:arm64v8-latest"
+      - "ghcr.io/fugginold/dockwatch:arm64v8-{{ .Version }}"
+      - "ghcr.io/fugginold/dockwatch:arm64v8-latest"
+
+docker_manifests:
+  - name_template: "fugginold/dockwatch:{{ .Version }}"
+    image_templates:
+      - "fugginold/dockwatch:amd64-{{ .Version }}"
+      - "fugginold/dockwatch:i386-{{ .Version }}"
+      - "fugginold/dockwatch:armhf-{{ .Version }}"
+      - "fugginold/dockwatch:arm64v8-{{ .Version }}"
+  - name_template: "fugginold/dockwatch:latest"
+    image_templates:
+      - "fugginold/dockwatch:amd64-latest"
+      - "fugginold/dockwatch:i386-latest"
+      - "fugginold/dockwatch:armhf-latest"
+      - "fugginold/dockwatch:arm64v8-latest"
+  - name_template: "ghcr.io/fugginold/dockwatch:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/fugginold/dockwatch:amd64-{{ .Version }}"
+      - "ghcr.io/fugginold/dockwatch:i386-{{ .Version }}"
+      - "ghcr.io/fugginold/dockwatch:armhf-{{ .Version }}"
+      - "ghcr.io/fugginold/dockwatch:arm64v8-{{ .Version }}"
+  - name_template: "ghcr.io/fugginold/dockwatch:latest"
+    image_templates:
+      - "ghcr.io/fugginold/dockwatch:amd64-latest"
+      - "ghcr.io/fugginold/dockwatch:i386-latest"
+      - "ghcr.io/fugginold/dockwatch:armhf-latest"
+      - "ghcr.io/fugginold/dockwatch:arm64v8-latest"
