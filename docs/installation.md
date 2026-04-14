@@ -20,7 +20,17 @@ sudo systemctl enable --now docker
 
 ### Run Dockwatch (docker run)
 
-Set `DOCKER_API_VERSION` from your daemon to avoid Docker client/server API mismatch errors:
+You can optionally use the install helper script to enter a cron schedule at install time:
+
+```bash
+./scripts/install-dockwatch.sh
+```
+
+The script prompts for a schedule and runs Dockwatch with `--schedule <value>`.
+
+If you prefer manual installation, run Dockwatch with API-version auto-detection to avoid Docker client/server API mismatch errors:
+
+
 
 ```bash
 docker rm -f dockwatch 2>/dev/null || true
@@ -31,7 +41,8 @@ docker run -d \
   --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e DOCKER_API_VERSION="${DW_API_VERSION}" \
-  fugginold/dockwatch:latest
+  fugginold/dockwatch:latest \
+  --schedule "@every 24h"
 ```
 
 ### Run Dockwatch (Docker Compose)
@@ -42,6 +53,7 @@ services:
     image: fugginold/dockwatch:latest
     container_name: dockwatch
     restart: unless-stopped
+    command: --schedule "@every 24h"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:

@@ -3,7 +3,7 @@ By default, dockwatch will watch all containers. However, sometimes only some co
 There are two options:
 
 -   **Fully exclude**: You can choose to exclude containers entirely from being watched by dockwatch.
--   **Monitor only**: In this mode, dockwatch checks for container updates, sends notifications and invokes the [pre-check/post-check hooks](https://containrrr.dev/dockwatch/lifecycle-hooks/) on the containers but does **not** perform the update.
+-   **Monitor only**: In this mode, dockwatch checks for container updates and invokes the [pre-check/post-check hooks](https://containrrr.dev/dockwatch/lifecycle-hooks/) on the containers but does **not** perform the update.
 
 ## Full Exclude 
 

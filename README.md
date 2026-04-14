@@ -10,8 +10,6 @@
   <p>A process for automating Docker container base image updates.</p>
 
   <p>
-    <a href="https://circleci.com/gh/fugginold/dockwatch"><img alt="Circle CI" src="https://circleci.com/gh/fugginold/dockwatch.svg?style=shield"></a>
-    <a href="https://codecov.io/gh/fugginold/dockwatch"><img alt="codecov" src="https://codecov.io/gh/fugginold/dockwatch/branch/main/graph/badge.svg"></a>
     <a href="https://godoc.org/github.com/fugginold/dockwatch"><img alt="GoDoc" src="https://godoc.org/github.com/fugginold/dockwatch?status.svg"></a>
     <a href="https://goreportcard.com/report/github.com/fugginold/dockwatch"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/fugginold/dockwatch"></a>
     <a href="https://github.com/fugginold/dockwatch/releases"><img alt="latest version" src="https://img.shields.io/github/tag/fugginold/dockwatch.svg"></a>
@@ -22,24 +20,52 @@
 
 </div>
 
-## Quick Start
+## What It Does
 
-Dockwatch is actively maintained as a container update automation tool for Docker environments.
+Dockwatch is a Go-based Docker update daemon. It monitors containers, checks whether image digests are stale in a registry, pulls newer images, and restarts containers using their existing runtime configuration.
 
-With dockwatch you can update the running version of your containerized app simply by pushing a new image to the Docker Hub or your own image registry. 
+Core capabilities:
 
-Dockwatch will pull down your new image, gracefully shut down your existing container and restart it with the same options that were used when it was deployed initially. Run the dockwatch container with the following command:
+- Automatic update detection and rollout
+- One-shot update mode for immediate checks
+- Optional HTTP API for update and schedule control
+- Interactive shell environment for on-the-fly execution
+- Prometheus metrics endpoint
+- Dependency-aware container restart ordering
 
+## Quick Start Instructions
+
+Start Dockwatch with defaults:
+
+```bash
+docker run -d \
+  --name dockwatch \
+  --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  fugginold/dockwatch:latest
 ```
-$ docker run --detach \
-    --name dockwatch \
-    --volume /var/run/docker.sock:/var/run/docker.sock \
-    fugginold/dockwatch
+
+Verify:
+
+```bash
+docker ps --filter name=dockwatch
+docker logs --tail=100 dockwatch
 ```
 
-## Installation (Debian)
+Run one immediate check and exit:
 
-Install Docker Engine from the official Docker repository:
+```bash
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  fugginold/dockwatch:latest \
+  --force-update
+```
+
+## Install & Useage Instructions
+
+### Debian install
+
+Install Docker Engine:
 
 ```bash
 sudo apt-get update
@@ -55,75 +81,78 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 sudo systemctl enable --now docker
 ```
 
-Run Dockwatch with API-version auto-detection to avoid client/server mismatch errors:
+Optional no-sudo Docker usage:
+
+```bash
+sudo usermod -aG docker "$USER"
+newgrp docker
+```
+
+Install Dockwatch with an explicit schedule:
 
 ```bash
 docker rm -f dockwatch 2>/dev/null || true
 DW_API_VERSION=$(docker version --format '{{.Server.APIVersion}}')
+DW_SCHEDULE='@every 24h'
 
 docker run -d \
   --name dockwatch \
   --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e DOCKER_API_VERSION="${DW_API_VERSION}" \
-  fugginold/dockwatch:latest
+  fugginold/dockwatch:latest \
+  --schedule "${DW_SCHEDULE}"
 ```
 
-Verify the installation:
+Architecture-specific tags when pinning platform:
+
+- AMD64: fugginold/dockwatch:amd64-latest
+- i386: fugginold/dockwatch:i386-latest
+- ARMv6/v7: fugginold/dockwatch:armhf-latest
+- ARM64: fugginold/dockwatch:arm64v8-latest
+
+### Runtime API usage
+
+Enable update API plus periodic scheduler controls:
 
 ```bash
-docker ps --filter name=dockwatch
-docker logs --tail=100 dockwatch
-```
-
-Docker Compose alternative:
-
-```yaml
-services:
-  dockwatch:
-    image: fugginold/dockwatch:latest
-    container_name: dockwatch
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      DOCKER_API_VERSION: "${DW_API_VERSION}"
-```
-
-```bash
+DW_TOKEN='replace-with-strong-token'
 DW_API_VERSION=$(docker version --format '{{.Server.APIVersion}}')
-export DW_API_VERSION
-docker compose up -d
+
+docker rm -f dockwatch 2>/dev/null || true
+docker run -d \
+  --name dockwatch \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e DOCKER_API_VERSION="${DW_API_VERSION}" \
+  -e DOCKWATCH_HTTP_API_TOKEN="${DW_TOKEN}" \
+  fugginold/dockwatch:latest \
+  --http-api-update \
+  --http-api-periodic-polls \
+  --schedule '@every 24h'
 ```
 
-For full setup details, see `docs/installation.md` and the docs site navigation.
-
-Dockwatch is intended to be used in homelabs, media centers, local dev environments, and similar. We do **not** recommend using Dockwatch in a commercial or production environment. If that is you, you should be looking into using Kubernetes. If that feels like too big a step for you, please look into solutions like [MicroK8s](https://microk8s.io/) and [k3s](https://k3s.io/) that take away a lot of the toil of running a Kubernetes cluster. 
-
-## Local Test Script
-
-Use the smoke-test helper to build Dockwatch and run it against a temporary nginx container:
+Examples:
 
 ```bash
-./scripts/test-dockwatch.sh
+curl -X POST -H "Authorization: Bearer ${DW_TOKEN}" http://localhost:8080/v1/update
+curl -H "Authorization: Bearer ${DW_TOKEN}" http://localhost:8080/v1/schedule
+curl -X POST -H "Authorization: Bearer ${DW_TOKEN}" "http://localhost:8080/v1/schedule?schedule=@every%2030m"
 ```
 
-For CI or local bounded runs, set a duration (seconds):
+## Reference the following docs below in /docs
 
-```bash
-TEST_DURATION_SECONDS=25 ./scripts/test-dockwatch.sh
-```
-
-Supported environment variables:
-
-- `TEST_DURATION_SECONDS`: Optional run duration in seconds. If set, the script exits successfully after the bounded run unless Dockwatch returns an actual error.
-- `TEST_CONTAINER_NAME`: Name for the temporary test container (default: `test-nginx`).
-- `TEST_IMAGE`: Test container image (default: `nginx:1.25.3`).
-- `TEST_INTERVAL`: Dockwatch interval in seconds (default: `10`).
-- `CLEANUP_TEST_CONTAINER`: `1` (default) removes the test container on exit, `0` keeps it for debugging.
-
-CI-friendly wrapper:
-
-```bash
-./scripts/test-dockwatch-ci.sh
-```
+- /docs/ARCHITECTURE.md
+- /docs/CONFIGURATION.md
+- /docs/API.md
+- /docs/DEVELOPMENT.md
+- /docs/TROUBLESHOOTING.md
+- /docs/arguments.md
+- /docs/installation.md
+- /docs/http-api-mode.md
+- /docs/metrics.md
+- /docs/lifecycle-hooks.md
+- /docs/container-selection.md
+- /docs/running-multiple-instances.md
+- /docs/interactive-shell.md

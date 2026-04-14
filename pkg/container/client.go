@@ -2,18 +2,19 @@ package container
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	sdkClient "github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 
 	"github.com/fugginold/dockwatch/pkg/registry"
 	"github.com/fugginold/dockwatch/pkg/registry/digest"
@@ -25,6 +26,7 @@ const defaultStopSignal = "SIGTERM"
 // A Client is the interface through which dockwatch interacts with the
 // Docker API.
 type Client interface {
+	Ping() error
 	ListContainers(t.Filter) ([]t.Container, error)
 	GetContainer(containerID t.ContainerID) (t.Container, error)
 	StopContainer(t.Container, time.Duration) error
@@ -42,17 +44,16 @@ type Client interface {
 //   - DOCKER_HOST			the docker-engine host to send api requests to
 //   - DOCKER_TLS_VERIFY		whether to verify tls certificates
 //   - DOCKER_API_VERSION	the minimum docker api version to work with
-func NewClient(opts ClientOptions) Client {
+func NewClient(opts ClientOptions) (Client, error) {
 	cli, err := sdkClient.NewClientWithOpts(sdkClient.FromEnv)
-
 	if err != nil {
-		log.Fatalf("Error instantiating Docker client: %s", err)
+		return nil, err
 	}
 
 	return dockerClient{
 		api:           cli,
 		ClientOptions: opts,
-	}
+	}, nil
 }
 
 // ClientOptions contains the options for how the docker client wrapper should behave
@@ -77,7 +78,7 @@ const (
 )
 
 type dockerClient struct {
-	api sdkClient.CommonAPIClient
+	api sdkClient.APIClient
 	ClientOptions
 }
 
@@ -90,6 +91,11 @@ func (client dockerClient) WarnOnHeadPullFailed(container t.Container) bool {
 	}
 
 	return registry.WarnOnAPIConsumption(container)
+}
+
+func (client dockerClient) Ping() error {
+	_, err := client.api.Ping(context.Background())
+	return err
 }
 
 func (client dockerClient) ListContainers(fn t.Filter) ([]t.Container, error) {
@@ -172,7 +178,7 @@ func (client dockerClient) GetContainer(containerID t.ContainerID) (t.Container,
 		}
 	}
 
-	imageInfo, _, err := client.api.ImageInspectWithRaw(bg, containerInfo.Image)
+	imageInfo, err := client.api.ImageInspect(bg, containerInfo.Image)
 	if err != nil {
 		log.Warnf("Failed to retrieve container image info: %v", err)
 		return &Container{containerInfo: &containerInfo, imageInfo: nil}, nil
@@ -198,8 +204,9 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 		}
 	}
 
-	// TODO: This should probably be checked.
-	_ = client.waitForStopOrTimeout(c, timeout)
+	if err := client.waitForContainerStop(c, timeout); err != nil {
+		log.Warnf("Failed to confirm container %s stopped: %v", shortID, err)
+	}
 
 	if c.ContainerInfo().HostConfig.AutoRemove {
 		log.Debugf("AutoRemove container %s, skipping ContainerRemove call.", shortID)
@@ -207,17 +214,16 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 		log.Debugf("Removing container %s", shortID)
 
 		if err := client.api.ContainerRemove(bg, idStr, container.RemoveOptions{Force: true, RemoveVolumes: client.RemoveVolumes}); err != nil {
-			if sdkClient.IsErrNotFound(err) {
+			if cerrdefs.IsNotFound(err) {
 				log.Debugf("Container %s not found, skipping removal.", shortID)
 				return nil
 			}
 			return err
 		}
-	}
 
-	// Wait for container to be removed. In this case an error is a good thing
-	if err := client.waitForStopOrTimeout(c, timeout); err == nil {
-		return fmt.Errorf("container %s (%s) could not be removed", c.Name(), shortID)
+		if err := client.waitForContainerRemoval(c, timeout); err != nil {
+			return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
+		}
 	}
 
 	return nil
@@ -295,19 +301,12 @@ func (client dockerClient) StartContainer(c t.Container) (t.ContainerID, error) 
 		return createdContainerID, nil
 	}
 
-	return createdContainerID, client.doStartContainer(bg, c, createdContainer)
-
-}
-
-func (client dockerClient) doStartContainer(bg context.Context, c t.Container, creation container.CreateResponse) error {
-	name := c.Name()
-
-	log.Debugf("Starting container %s (%s)", name, t.ContainerID(creation.ID).ShortID())
-	err := client.api.ContainerStart(bg, creation.ID, container.StartOptions{})
-	if err != nil {
-		return err
+	log.Debugf("Starting container %s (%s)", name, createdContainerID.ShortID())
+	if err := client.api.ContainerStart(bg, createdContainer.ID, container.StartOptions{}); err != nil {
+		return createdContainerID, err
 	}
-	return nil
+	return createdContainerID, nil
+
 }
 
 func (client dockerClient) RenameContainer(c t.Container, newName string) error {
@@ -332,7 +331,7 @@ func (client dockerClient) HasNewImage(ctx context.Context, container t.Containe
 	currentImageID := t.ImageID(container.ContainerInfo().ContainerJSONBase.Image)
 	imageName := container.ImageName()
 
-	newImageInfo, _, err := client.api.ImageInspectWithRaw(ctx, imageName)
+	newImageInfo, err := client.api.ImageInspect(ctx, imageName)
 	if err != nil {
 		return false, currentImageID, err
 	}
@@ -538,21 +537,41 @@ func (client dockerClient) waitForExecOrTimeout(bg context.Context, ID string, e
 	return false, nil
 }
 
-func (client dockerClient) waitForStopOrTimeout(c t.Container, waitTime time.Duration) error {
-	bg := context.Background()
-	timeout := time.After(waitTime)
+func (client dockerClient) waitForContainerStop(c t.Container, waitTime time.Duration) error {
+	if waitTime <= 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	defer cancel()
 
-	for {
-		select {
-		case <-timeout:
+	waitCh, errCh := client.api.ContainerWait(ctx, string(c.ID()), container.WaitConditionNotRunning)
+	select {
+	case <-waitCh:
+		return nil
+	case err := <-errCh:
+		if cerrdefs.IsNotFound(err) {
 			return nil
-		default:
-			if ci, err := client.api.ContainerInspect(bg, string(c.ID())); err != nil {
-				return err
-			} else if !ci.State.Running {
-				return nil
-			}
 		}
-		time.Sleep(1 * time.Second)
+		return err
+	}
+}
+
+func (client dockerClient) waitForContainerRemoval(c t.Container, waitTime time.Duration) error {
+	if waitTime <= 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
+	defer cancel()
+
+	waitCh, errCh := client.api.ContainerWait(ctx, string(c.ID()), container.WaitConditionRemoved)
+	select {
+	case <-waitCh:
+		return nil
+	case err := <-errCh:
+		if cerrdefs.IsNotFound(err) {
+			// Container already gone — that's the desired outcome
+			return nil
+		}
+		return err
 	}
 }

@@ -8,19 +8,19 @@ import (
 
 	"github.com/fugginold/dockwatch/pkg/container"
 	wt "github.com/fugginold/dockwatch/pkg/types"
-	"github.com/docker/docker/api/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
+	dockerImage "github.com/docker/docker/api/types/image"
 	"github.com/docker/go-connections/nat"
 )
 
 // CreateMockContainer creates a container substitute valid for testing
 func CreateMockContainer(id string, name string, image string, created time.Time) wt.Container {
-	content := types.ContainerJSON{
-		ContainerJSONBase: &types.ContainerJSONBase{
+	content := dockerContainer.InspectResponse{
+		ContainerJSONBase: &dockerContainer.ContainerJSONBase{
 			ID:      id,
 			Image:   image,
 			Name:    name,
-			Created: created.String(),
+			Created: created.UTC().Format(time.RFC3339Nano),
 			HostConfig: &dockerContainer.HostConfig{
 				PortBindings: map[nat.Port][]nat.PortBinding{},
 			},
@@ -38,8 +38,8 @@ func CreateMockContainer(id string, name string, image string, created time.Time
 }
 
 // CreateMockImageInfo returns a mock image info struct based on the passed image
-func CreateMockImageInfo(image string) *types.ImageInspect {
-	return &types.ImageInspect{
+func CreateMockImageInfo(image string) *dockerImage.InspectResponse {
+	return &dockerImage.InspectResponse{
 		ID: image,
 		RepoDigests: []string{
 			image,
@@ -48,18 +48,18 @@ func CreateMockImageInfo(image string) *types.ImageInspect {
 }
 
 // CreateMockContainerWithImageInfo should only be used for testing
-func CreateMockContainerWithImageInfo(id string, name string, image string, created time.Time, imageInfo types.ImageInspect) wt.Container {
+func CreateMockContainerWithImageInfo(id string, name string, image string, created time.Time, imageInfo dockerImage.InspectResponse) wt.Container {
 	return CreateMockContainerWithImageInfoP(id, name, image, created, &imageInfo)
 }
 
 // CreateMockContainerWithImageInfoP should only be used for testing
-func CreateMockContainerWithImageInfoP(id string, name string, image string, created time.Time, imageInfo *types.ImageInspect) wt.Container {
-	content := types.ContainerJSON{
-		ContainerJSONBase: &types.ContainerJSONBase{
+func CreateMockContainerWithImageInfoP(id string, name string, image string, created time.Time, imageInfo *dockerImage.InspectResponse) wt.Container {
+	content := dockerContainer.InspectResponse{
+		ContainerJSONBase: &dockerContainer.ContainerJSONBase{
 			ID:      id,
 			Image:   image,
 			Name:    name,
-			Created: created.String(),
+			Created: created.UTC().Format(time.RFC3339Nano),
 		},
 		Config: &dockerContainer.Config{
 			Image:  image,
@@ -81,16 +81,16 @@ func CreateMockContainerWithDigest(id string, name string, image string, created
 
 // CreateMockContainerWithConfig creates a container substitute valid for testing
 func CreateMockContainerWithConfig(id string, name string, image string, running bool, restarting bool, created time.Time, config *dockerContainer.Config) wt.Container {
-	content := types.ContainerJSON{
-		ContainerJSONBase: &types.ContainerJSONBase{
+	content := dockerContainer.InspectResponse{
+		ContainerJSONBase: &dockerContainer.ContainerJSONBase{
 			ID:    id,
 			Image: image,
 			Name:  name,
-			State: &types.ContainerState{
+			State: &dockerContainer.State{
 				Running:    running,
 				Restarting: restarting,
 			},
-			Created: created.String(),
+			Created: created.UTC().Format(time.RFC3339Nano),
 			HostConfig: &dockerContainer.HostConfig{
 				PortBindings: map[nat.Port][]nat.PortBinding{},
 			},
@@ -120,13 +120,13 @@ func CreateContainerForProgress(index int, idPrefix int, nameFormat string) (wt.
 }
 
 // CreateMockContainerWithLinks should only be used for testing
-func CreateMockContainerWithLinks(id string, name string, image string, created time.Time, links []string, imageInfo *types.ImageInspect) wt.Container {
-	content := types.ContainerJSON{
-		ContainerJSONBase: &types.ContainerJSONBase{
+func CreateMockContainerWithLinks(id string, name string, image string, created time.Time, links []string, imageInfo *dockerImage.InspectResponse) wt.Container {
+	content := dockerContainer.InspectResponse{
+		ContainerJSONBase: &dockerContainer.ContainerJSONBase{
 			ID:      id,
 			Image:   image,
 			Name:    name,
-			Created: created.String(),
+			Created: created.UTC().Format(time.RFC3339Nano),
 			HostConfig: &dockerContainer.HostConfig{
 				Links: links,
 			},

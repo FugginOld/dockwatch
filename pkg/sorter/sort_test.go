@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	dockerTypes "github.com/docker/docker/api/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
+	dockerImage "github.com/docker/docker/api/types/image"
 	"github.com/docker/go-connections/nat"
 	"github.com/fugginold/dockwatch/internal/actions/mocks"
 	"github.com/fugginold/dockwatch/pkg/container"
@@ -19,8 +19,8 @@ import (
 // createContainerWithRFC3339Date creates a container whose Created field is formatted
 // as RFC3339Nano so that ByCreated.Less can parse it correctly.
 func createContainerWithRFC3339Date(id, name, image string, created time.Time) types.Container {
-	content := &dockerTypes.ContainerJSON{
-		ContainerJSONBase: &dockerTypes.ContainerJSONBase{
+	content := &dockerContainer.InspectResponse{
+		ContainerJSONBase: &dockerContainer.ContainerJSONBase{
 			ID:      id,
 			Image:   image,
 			Name:    name,
@@ -35,7 +35,7 @@ func createContainerWithRFC3339Date(id, name, image string, created time.Time) t
 			ExposedPorts: nat.PortSet{},
 		},
 	}
-	imageInfo := &dockerTypes.ImageInspect{
+	imageInfo := &dockerImage.InspectResponse{
 		ID:          image,
 		RepoDigests: []string{image},
 	}

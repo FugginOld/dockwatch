@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,11 +17,11 @@ import (
 	"github.com/fugginold/dockwatch/internal/meta"
 	"github.com/fugginold/dockwatch/pkg/api"
 	apiMetrics "github.com/fugginold/dockwatch/pkg/api/metrics"
+	apiSchedule "github.com/fugginold/dockwatch/pkg/api/schedule"
 	"github.com/fugginold/dockwatch/pkg/api/update"
 	"github.com/fugginold/dockwatch/pkg/container"
 	"github.com/fugginold/dockwatch/pkg/filters"
 	"github.com/fugginold/dockwatch/pkg/metrics"
-	"github.com/fugginold/dockwatch/pkg/notifications"
 	t "github.com/fugginold/dockwatch/pkg/types"
 	"github.com/robfig/cron"
 	log "github.com/sirupsen/logrus"
@@ -28,7 +29,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
+// runConfig holds all runtime configuration populated during PreRun.
+// Consolidating these into a struct avoids package-level mutable state.
+type runConfig struct {
 	client            container.Client
 	scheduleSpec      string
 	cleanup           bool
@@ -37,13 +40,14 @@ var (
 	monitorOnly       bool
 	enableLabel       bool
 	disableContainers []string
-	notifier          t.Notifier
 	timeout           time.Duration
 	lifecycleHooks    bool
 	rollingRestart    bool
 	scope             string
 	labelPrecedence   bool
-)
+}
+
+var cfg runConfig
 
 var rootCmd = NewRootCommand()
 
@@ -83,24 +87,28 @@ func PreRun(cmd *cobra.Command, _ []string) {
 		log.Fatalf("Failed to initialize logging: %s", err.Error())
 	}
 
-	scheduleSpec, _ = f.GetString("schedule")
+	cfg.scheduleSpec, _ = f.GetString("schedule")
 
 	flags.GetSecretsFromFiles(cmd)
-	cleanup, noRestart, monitorOnly, timeout = flags.ReadFlags(cmd)
+	rf := flags.ReadFlags(cmd)
+	cfg.cleanup = rf.Cleanup
+	cfg.noRestart = rf.NoRestart
+	cfg.monitorOnly = rf.MonitorOnly
+	cfg.timeout = rf.Timeout
 
-	if timeout < 0 {
+	if cfg.timeout < 0 {
 		log.Fatal("Please specify a positive value for timeout value.")
 	}
 
-	enableLabel, _ = f.GetBool("label-enable")
-	disableContainers, _ = f.GetStringSlice("disable-containers")
-	lifecycleHooks, _ = f.GetBool("enable-lifecycle-hooks")
-	rollingRestart, _ = f.GetBool("rolling-restart")
-	scope, _ = f.GetString("scope")
-	labelPrecedence, _ = f.GetBool("label-take-precedence")
+	cfg.enableLabel, _ = f.GetBool("label-enable")
+	cfg.disableContainers, _ = f.GetStringSlice("disable-containers")
+	cfg.lifecycleHooks, _ = f.GetBool("enable-lifecycle-hooks")
+	cfg.rollingRestart, _ = f.GetBool("rolling-restart")
+	cfg.scope, _ = f.GetString("scope")
+	cfg.labelPrecedence, _ = f.GetBool("label-take-precedence")
 
-	if scope != "" {
-		log.Debugf(`Using scope %q`, scope)
+	if cfg.scope != "" {
+		log.Debugf(`Using scope %q`, cfg.scope)
 	}
 
 	// configure environment vars for client
@@ -109,38 +117,43 @@ func PreRun(cmd *cobra.Command, _ []string) {
 		log.Fatal(err)
 	}
 
-	noPull, _ = f.GetBool("no-pull")
+	cfg.noPull, _ = f.GetBool("no-pull")
 	includeStopped, _ := f.GetBool("include-stopped")
 	includeRestarting, _ := f.GetBool("include-restarting")
 	reviveStopped, _ := f.GetBool("revive-stopped")
 	removeVolumes, _ := f.GetBool("remove-volumes")
 	warnOnHeadPullFailed, _ := f.GetString("warn-on-head-failure")
 
-	if monitorOnly && noPull {
+	if cfg.monitorOnly && cfg.noPull {
 		log.Warn("Using `DOCKWATCH_NO_PULL` and `DOCKWATCH_MONITOR_ONLY` simultaneously might lead to no action being taken at all. If this is intentional, you may safely ignore this message.")
 	}
 
-	client = container.NewClient(container.ClientOptions{
+	cfg.client, err = container.NewClient(container.ClientOptions{
 		IncludeStopped:    includeStopped,
 		ReviveStopped:     reviveStopped,
 		RemoveVolumes:     removeVolumes,
 		IncludeRestarting: includeRestarting,
 		WarnOnHeadFailed:  container.WarningStrategy(warnOnHeadPullFailed),
 	})
-
-	notifier = notifications.NewNotifier()
-	notifier.AddLogHook()
+	if err != nil {
+		log.Fatalf("Error instantiating Docker client: %s", err)
+	}
 }
 
 // Run is the main execution flow of the command
 func Run(c *cobra.Command, names []string) {
-	filter, filterDesc := filters.BuildFilter(names, disableContainers, enableLabel, scope)
+	filter, filterDesc := filters.BuildFilter(names, cfg.disableContainers, cfg.enableLabel, cfg.scope)
 	runOnce, _ := c.PersistentFlags().GetBool("run-once")
+	forceUpdate, _ := c.PersistentFlags().GetBool("force-update")
 	enableUpdateAPI, _ := c.PersistentFlags().GetBool("http-api-update")
 	enableMetricsAPI, _ := c.PersistentFlags().GetBool("http-api-metrics")
 	unblockHTTPAPI, _ := c.PersistentFlags().GetBool("http-api-periodic-polls")
 	apiToken, _ := c.PersistentFlags().GetString("http-api-token")
 	healthCheck, _ := c.PersistentFlags().GetBool("health-check")
+
+	if forceUpdate {
+		runOnce = true
+	}
 
 	if healthCheck {
 		// health check should not have pid 1
@@ -151,44 +164,69 @@ func Run(c *cobra.Command, names []string) {
 		os.Exit(0)
 	}
 
-	if rollingRestart && monitorOnly {
+	if cfg.rollingRestart && cfg.monitorOnly {
 		log.Fatal("Rolling restarts is not compatible with the global monitor only flag")
 	}
 
-	awaitDockerClient()
+	awaitDockerClient(cfg.client)
 
-	if err := actions.CheckForSanity(client, filter, rollingRestart); err != nil {
+	if err := actions.CheckForSanity(cfg.client, filter, cfg.rollingRestart); err != nil {
 		logNotifyExit(err)
 	}
 
 	if runOnce {
 		writeStartupMessage(c, time.Time{}, filterDesc)
-		runUpdatesWithNotifications(filter)
-		notifier.Close()
+		runUpdates(filter)
 		os.Exit(0)
 		return
 	}
 
-	if err := actions.CheckForMultipleDockwatchInstances(client, cleanup, scope); err != nil {
+	if err := actions.CheckForMultipleDockwatchInstances(cfg.client, cfg.cleanup, cfg.scope); err != nil {
 		logNotifyExit(err)
 	}
 
 	// The lock is shared between the scheduler and the HTTP API. It only allows one update to run at a time.
 	updateLock := make(chan bool, 1)
 	updateLock <- true
+	periodicEnabled := !enableUpdateAPI || unblockHTTPAPI
+
+	stat, _ := os.Stdin.Stat()
+	isInteractive := (stat.Mode() & os.ModeCharDevice) != 0
+
+	var scheduleCtrl *scheduleController
+	if periodicEnabled || isInteractive {
+		scheduleCtrl = newScheduleController(updateLock, filter)
+		if periodicEnabled {
+			nextRun, err := scheduleCtrl.Set(cfg.scheduleSpec)
+			if err != nil {
+				log.Error(err)
+				os.Exit(1)
+				return
+			}
+			writeStartupMessage(c, nextRun, filterDesc)
+		} else {
+			writeStartupMessage(c, time.Time{}, filterDesc)
+		}
+	} else if !unblockHTTPAPI {
+		writeStartupMessage(c, time.Time{}, filterDesc)
+	}
 
 	httpAPI := api.New(apiToken)
 
 	if enableUpdateAPI {
 		updateHandler := update.New(func(images []string) {
-			metric := runUpdatesWithNotifications(filters.FilterByImage(images, filter))
+			metric := runUpdates(filters.FilterByImage(images, filter))
 			metrics.RegisterScan(metric)
 		}, updateLock)
 		httpAPI.RegisterFunc(updateHandler.Path, updateHandler.Handle)
-		// If polling isn't enabled the scheduler is never started, and
-		// we need to trigger the startup messages manually.
-		if !unblockHTTPAPI {
-			writeStartupMessage(c, time.Time{}, filterDesc)
+
+		if scheduleCtrl != nil {
+			scheduleHandler := apiSchedule.New(
+				func() string { return scheduleCtrl.Current() },
+				func() time.Time { return scheduleCtrl.NextRun() },
+				func(spec string) (time.Time, error) { return scheduleCtrl.Set(spec) },
+			)
+			httpAPI.RegisterFunc(scheduleHandler.Path, scheduleHandler.Handle)
 		}
 	}
 
@@ -197,26 +235,49 @@ func Run(c *cobra.Command, names []string) {
 		httpAPI.RegisterHandler(metricsHandler.Path, metricsHandler.Handle)
 	}
 
-	if err := httpAPI.Start(enableUpdateAPI && !unblockHTTPAPI); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	apiShouldBlock := enableUpdateAPI && !unblockHTTPAPI && !isInteractive
+	if err := httpAPI.Start(apiShouldBlock); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("failed to start API", err)
 	}
 
-	if err := runUpgradesOnSchedule(c, filter, filterDesc, updateLock); err != nil {
-		log.Error(err)
+	if isInteractive {
+		go func() {
+			runShell(scheduleCtrl, updateLock, filter)
+			// Trigger a clean shutdown when the shell exits
+			p, _ := os.FindProcess(os.Getpid())
+			_ = p.Signal(os.Interrupt)
+		}()
 	}
 
-	os.Exit(1)
+	if periodicEnabled || isInteractive {
+		waitForInterrupt()
+		if scheduleCtrl != nil {
+			scheduleCtrl.Stop()
+		}
+		log.Info("Waiting for running update to be finished...")
+		<-updateLock
+	}
+
+	os.Exit(0) // clean shutdown
 }
 
 func logNotifyExit(err error) {
 	log.Error(err)
-	notifier.Close()
 	os.Exit(1)
 }
 
-func awaitDockerClient() {
-	log.Debug("Sleeping for a second to ensure the docker api client has been properly initialized.")
-	time.Sleep(1 * time.Second)
+// awaitDockerClient retries Ping until the Docker API is reachable, failing
+// fatally after 5 attempts. This replaces a fixed 1-second sleep that could
+// succeed before Docker was ready or fail silently when it wasn't.
+func awaitDockerClient(client container.Client) {
+	for attempt := 1; attempt <= 5; attempt++ {
+		if err := client.Ping(); err == nil {
+			return
+		}
+		log.Debugf("Docker API not yet available (attempt %d/5), retrying in 1s...", attempt)
+		time.Sleep(1 * time.Second)
+	}
+	log.Fatal("Docker API unreachable after 5 attempts")
 }
 
 func formatDuration(d time.Duration) string {
@@ -262,118 +323,138 @@ func writeStartupMessage(c *cobra.Command, sched time.Time, filtering string) {
 	noStartupMessage, _ := c.PersistentFlags().GetBool("no-startup-message")
 	enableUpdateAPI, _ := c.PersistentFlags().GetBool("http-api-update")
 
-	var startupLog *log.Entry
-	if noStartupMessage {
-		startupLog = notifications.LocalLog
-	} else {
-		startupLog = log.NewEntry(log.StandardLogger())
-		// Batch up startup messages to send them as a single notification
-		notifier.StartNotification()
-	}
-
-	startupLog.Info("Dockwatch ", meta.Version)
-
-	notifierNames := notifier.GetNames()
-	if len(notifierNames) > 0 {
-		startupLog.Info("Using notifications: " + strings.Join(notifierNames, ", "))
-	} else {
-		startupLog.Info("Using no notifications")
-	}
-
-	startupLog.Info(filtering)
-
-	if !sched.IsZero() {
-		until := formatDuration(time.Until(sched))
-		startupLog.Info("Scheduling first run: " + sched.Format("2006-01-02 15:04:05 -0700 MST"))
-		startupLog.Info("Note that the first check will be performed in " + until)
-	} else if runOnce, _ := c.PersistentFlags().GetBool("run-once"); runOnce {
-		startupLog.Info("Running a one time update.")
-	} else {
-		startupLog.Info("Periodic runs are not enabled.")
-	}
-
-	if enableUpdateAPI {
-		// TODO: make listen port configurable
-		startupLog.Info("The HTTP API is enabled at :8080.")
-	}
-
 	if !noStartupMessage {
-		// Send the queued up startup messages, not including the trace warning below (to make sure it's noticed)
-		notifier.SendNotification(nil)
+		startupLog := log.NewEntry(log.StandardLogger())
+		startupLog.Info("Dockwatch ", meta.Version)
+		startupLog.Info(filtering)
+
+		if !sched.IsZero() {
+			until := formatDuration(time.Until(sched))
+			startupLog.Info("Scheduling first run: " + sched.Format("2006-01-02 15:04:05 -0700 MST"))
+			startupLog.Info("Note that the first check will be performed in " + until)
+		} else if runOnce, _ := c.PersistentFlags().GetBool("run-once"); runOnce {
+			startupLog.Info("Running a one time update.")
+		} else {
+			startupLog.Info("Periodic runs are not enabled.")
+		}
+
+		if enableUpdateAPI {
+			// TODO: make listen port configurable
+			startupLog.Info("The HTTP API is enabled at :8080.")
+		}
 	}
 
 	if log.IsLevelEnabled(log.TraceLevel) {
-		startupLog.Warn("Trace level enabled: log will include sensitive information as credentials and tokens")
+		log.Warn("Trace level enabled: log will include sensitive information as credentials and tokens")
 	}
 }
 
-func runUpgradesOnSchedule(c *cobra.Command, filter t.Filter, filtering string, lock chan bool) error {
-	if lock == nil {
-		lock = make(chan bool, 1)
-		lock <- true
-	}
-
-	scheduler := cron.New()
-	err := scheduler.AddFunc(
-		scheduleSpec,
-		func() {
-			select {
-			case v := <-lock:
-				defer func() { lock <- v }()
-				metric := runUpdatesWithNotifications(filter)
-				metrics.RegisterScan(metric)
-			default:
-				// Update was skipped
-				metrics.RegisterScan(nil)
-				log.Debug("Skipped another update already running.")
-			}
-
-			nextRuns := scheduler.Entries()
-			if len(nextRuns) > 0 {
-				log.Debug("Scheduled next run: " + nextRuns[0].Next.String())
-			}
-		})
-
-	if err != nil {
-		return err
-	}
-
-	writeStartupMessage(c, scheduler.Entries()[0].Schedule.Next(time.Now()), filtering)
-
-	scheduler.Start()
-
-	// Graceful shut-down on SIGINT/SIGTERM
+func waitForInterrupt() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	signal.Notify(interrupt, syscall.SIGTERM)
 
 	<-interrupt
-	scheduler.Stop()
-	log.Info("Waiting for running update to be finished...")
-	<-lock
-	return nil
 }
 
-func runUpdatesWithNotifications(filter t.Filter) *metrics.Metric {
-	notifier.StartNotification()
+type scheduleController struct {
+	mu        sync.Mutex
+	scheduler *cron.Cron
+	lock      chan bool
+	filter    t.Filter
+	spec      string
+}
+
+func newScheduleController(lock chan bool, filter t.Filter) *scheduleController {
+	return &scheduleController{
+		lock:   lock,
+		filter: filter,
+	}
+}
+
+func (c *scheduleController) Set(spec string) (time.Time, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	scheduler := cron.New()
+	err := scheduler.AddFunc(spec, func() {
+		select {
+		case v := <-c.lock:
+			defer func() { c.lock <- v }()
+			metric := runUpdates(c.filter)
+			metrics.RegisterScan(metric)
+		default:
+			metrics.RegisterScan(nil)
+			log.Debug("Skipped another update already running.")
+		}
+
+		nextRuns := scheduler.Entries()
+		if len(nextRuns) > 0 {
+			log.Debug("Scheduled next run: " + nextRuns[0].Next.String())
+		}
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	nextRun := scheduler.Entries()[0].Schedule.Next(time.Now())
+	scheduler.Start()
+
+	if c.scheduler != nil {
+		c.scheduler.Stop()
+	}
+
+	c.scheduler = scheduler
+	c.spec = spec
+
+	return nextRun, nil
+}
+
+func (c *scheduleController) Current() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.spec
+}
+
+func (c *scheduleController) NextRun() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.scheduler == nil {
+		return time.Time{}
+	}
+	entries := c.scheduler.Entries()
+	if len(entries) == 0 {
+		return time.Time{}
+	}
+	return entries[0].Next
+}
+
+func (c *scheduleController) Stop() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.scheduler != nil {
+		c.scheduler.Stop()
+	}
+}
+
+func runUpdates(filter t.Filter) *metrics.Metric {
 	updateParams := t.UpdateParams{
 		Filter:          filter,
-		Cleanup:         cleanup,
-		NoRestart:       noRestart,
-		Timeout:         timeout,
-		MonitorOnly:     monitorOnly,
-		LifecycleHooks:  lifecycleHooks,
-		RollingRestart:  rollingRestart,
-		LabelPrecedence: labelPrecedence,
-		NoPull:          noPull,
+		Cleanup:         cfg.cleanup,
+		NoRestart:       cfg.noRestart,
+		Timeout:         cfg.timeout,
+		MonitorOnly:     cfg.monitorOnly,
+		LifecycleHooks:  cfg.lifecycleHooks,
+		RollingRestart:  cfg.rollingRestart,
+		LabelPrecedence: cfg.labelPrecedence,
+		NoPull:          cfg.noPull,
 	}
-	result, err := actions.Update(client, updateParams)
+	result, err := actions.Update(cfg.client, updateParams)
 	if err != nil {
 		log.Error(err)
 	}
-	notifier.SendNotification(result)
 	metricResults := metrics.NewMetric(result)
-	notifications.LocalLog.WithFields(log.Fields{
+	log.WithFields(log.Fields{
 		"Scanned": metricResults.Scanned,
 		"Updated": metricResults.Updated,
 		"Failed":  metricResults.Failed,

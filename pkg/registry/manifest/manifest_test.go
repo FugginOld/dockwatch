@@ -6,7 +6,7 @@ import (
 
 	"github.com/fugginold/dockwatch/internal/actions/mocks"
 	"github.com/fugginold/dockwatch/pkg/registry/manifest"
-	apiTypes "github.com/docker/docker/api/types"
+	dockerImage "github.com/docker/docker/api/types/image"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -60,7 +60,7 @@ var _ = Describe("the manifest module", func() {
 })
 
 func buildMockContainerManifestURL(imageRef string) (string, error) {
-	imageInfo := apiTypes.ImageInspect{
+	imageInfo := dockerImage.InspectResponse{
 		RepoTags: []string{
 			imageRef,
 		},

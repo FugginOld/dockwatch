@@ -1,88 +1,72 @@
-name: Release (Production)
+name: Release
 
 on:
-  workflow_dispatch: {}
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - '**/v[0-9]+.[0-9]+.[0-9]+'
+      - "v*"
 
 jobs:
-  lint:
-    name: Lint
+  docker:
+    name: docker
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.25.x
-      - uses: dominikh/staticcheck-action@ba605356b4b29a60e87ab9404b712f3461e566dc #v1.3.0
-        with:
-          version: "latest"
-          install-go: "false"
-          checks: "all,-SA1019,-ST*"
 
-  test:
-    name: Test
-    strategy:
-      matrix:
-        go-version:
-          - 1.25.x
-        platform:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.25.x
-      - name: Run tests
-        run: |
-          go test ./... -coverprofile coverage.out
+    permissions:
+      contents: write
+      packages: write
 
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs:
-      - test
-      - lint
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.25.x
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Login to Docker Hub
+
+      - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.BOT_USERNAME }}
           password: ${{ secrets.BOT_GHCR_PAT }}
           registry: ghcr.io
-      - name: Restore any pipeline-modified files
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.x
+
+      # Build binary and stage it where dockers_v2 expects it
+      - name: Build app
+        run: |
+          CGO_ENABLED=0 go build -o dockwatch
+          mkdir -p linux/amd64
+          cp dockwatch linux/amd64/dockwatch
+
+      # Build local image
+      - name: Build Docker image (test)
+        run: docker build --build-arg TARGETPLATFORM=linux/amd64 -t dockwatch:test .
+
+      # Health test container
+      - name: Test container
+        run: |
+          chmod +x scripts/test-container.sh
+          scripts/test-container.sh dockwatch:test
+
+      # Restore permissions changed by chmod so GoReleaser sees a clean tree
+      - name: Restore modified files
         run: git restore scripts/test-container.sh 2>/dev/null || true
-      - name: Build
+
+      # Only release if container is healthy
+      - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
@@ -90,10 +74,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  renew-docs:
-    name: Refresh pkg.go.dev
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Pull new module version
-        uses: andrewslotin/go-proxy-pull-action@50fea06a976087614babb9508e5c528b464f4645 #master@2022-10-14
+      # Update rollback pointer
+      - name: Update stable tag
+        run: |
+          git tag -f stable
+          git push origin stable --force

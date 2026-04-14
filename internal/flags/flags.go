@@ -49,6 +49,12 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		envString("DOCKWATCH_SCHEDULE"),
 		"The cron expression which defines when to update")
 
+	flags.StringP(
+		"cron",
+		"",
+		"",
+		"Alias for --schedule")
+
 	flags.DurationP(
 		"stop-timeout",
 		"t",
@@ -127,6 +133,12 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"R",
 		envBool("DOCKWATCH_RUN_ONCE"),
 		"Run once now and exit")
+
+	flags.BoolP(
+		"force-update",
+		"",
+		false,
+		"Alias for --run-once; immediately check for updates and exit")
 
 	flags.BoolP(
 		"include-restarting",
@@ -218,9 +230,6 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"Label applied to containers take precedence over arguments")
 }
 
-// RegisterNotificationFlags is kept as a no-op for source compatibility.
-func RegisterNotificationFlags(_ *cobra.Command) {}
-
 func envString(key string) string {
 	viper.MustBindEnv(key)
 	return viper.GetString(key)
@@ -290,30 +299,35 @@ func EnvConfig(cmd *cobra.Command) error {
 	return nil
 }
 
+// RunFlags holds the common runtime flags read by ReadFlags
+type RunFlags struct {
+	Cleanup     bool
+	NoRestart   bool
+	MonitorOnly bool
+	Timeout     time.Duration
+}
+
 // ReadFlags reads common flags used in the main program flow of dockwatch
-func ReadFlags(cmd *cobra.Command) (bool, bool, bool, time.Duration) {
+func ReadFlags(cmd *cobra.Command) RunFlags {
 	flags := cmd.PersistentFlags()
 
 	var err error
-	var cleanup bool
-	var noRestart bool
-	var monitorOnly bool
-	var timeout time.Duration
+	var rf RunFlags
 
-	if cleanup, err = flags.GetBool("cleanup"); err != nil {
+	if rf.Cleanup, err = flags.GetBool("cleanup"); err != nil {
 		log.Fatal(err)
 	}
-	if noRestart, err = flags.GetBool("no-restart"); err != nil {
+	if rf.NoRestart, err = flags.GetBool("no-restart"); err != nil {
 		log.Fatal(err)
 	}
-	if monitorOnly, err = flags.GetBool("monitor-only"); err != nil {
+	if rf.MonitorOnly, err = flags.GetBool("monitor-only"); err != nil {
 		log.Fatal(err)
 	}
-	if timeout, err = flags.GetDuration("stop-timeout"); err != nil {
+	if rf.Timeout, err = flags.GetDuration("stop-timeout"); err != nil {
 		log.Fatal(err)
 	}
 
-	return cleanup, noRestart, monitorOnly, timeout
+	return rf
 }
 
 func setEnvOptStr(env string, opt string) error {
@@ -416,8 +430,25 @@ func ProcessFlagAliases(flags *pflag.FlagSet) {
 		}
 	}
 
+	cronValue, err := flags.GetString(`cron`)
+	if err != nil {
+		log.Fatalf(`Failed to get flag: %v`, err)
+	}
+
 	scheduleChanged := flags.Changed(`schedule`)
 	intervalChanged := flags.Changed(`interval`)
+	cronChanged := flags.Changed(`cron`)
+	if cronChanged {
+		if scheduleChanged {
+			if schedule, _ := flags.GetString(`schedule`); schedule != cronValue {
+				log.Fatal(`Only schedule or cron can be defined, not both.`)
+			}
+		} else {
+			_ = flags.Set(`schedule`, cronValue)
+			scheduleChanged = true
+		}
+	}
+
 	// FIXME: snakeswap
 	// due to how viper is integrated by swapping the defaults for the flags, we need this hack:
 	if val, _ := flags.GetString(`schedule`); val != `` {
@@ -443,6 +474,10 @@ func ProcessFlagAliases(flags *pflag.FlagSet) {
 
 	if flagIsEnabled(flags, `trace`) {
 		_ = flags.Set(`log-level`, `trace`)
+	}
+
+	if flagIsEnabled(flags, `force-update`) {
+		_ = flags.Set(`run-once`, `true`)
 	}
 
 }

@@ -31,6 +31,8 @@ $ docker run --rm \
 
 In the example above, dockwatch will execute an upgrade attempt on the containers named "nginx" and "redis". Using this mode will enable debugging output showing all actions performed, as usage is intended for interactive users. Once the attempt is completed, the container will exit and remove itself due to the `--rm` flag.
 
+If you want a clearer command name for one-shot runs, use `--force-update` (alias for `--run-once`).
+
 When no arguments are specified, dockwatch will monitor all running containers.
 
 ## Secrets/Files
@@ -385,7 +387,7 @@ See [With label taking precedence over arguments](#with-label-taking-precedence-
 
 ## Without sending a startup message
 
-Do not send a message after dockwatch started. Otherwise there will be an info-level notification.
+Do not send a startup message after dockwatch started.
 
 ```text
 
@@ -398,7 +400,7 @@ Environment Variable: DOCKWATCH_NO_STARTUP_MESSAGE
 
 ## Run once
 
-Run an update attempt against a container name list one time immediately and exit.
+Run a single update check immediately and exit.
 
 ```text
 
@@ -406,6 +408,32 @@ Run an update attempt against a container name list one time immediately and exi
 Environment Variable: DOCKWATCH_RUN_ONCE
                 Type: Boolean
              Default: false
+
+```
+
+## Force update
+
+Alias for `--run-once`. Triggers an immediate update check and exits instead of waiting for the next scheduled poll.
+
+```text
+
+            Argument: --force-update
+Environment Variable: N/A
+                Type: Boolean
+             Default: false
+
+```
+
+## Cron
+
+Alias for `--schedule`.
+
+```text
+
+            Argument: --cron
+Environment Variable: N/A
+                Type: String
+             Default: ""
 
 ```
 
@@ -524,8 +552,7 @@ Environment Variable: DOCKWATCH_TIMEOUT
 
 ## TLS Verification
 
-Use TLS when connecting to the Docker socket and verify the server's certificate. See below for options used to
-configure notifications.
+Use TLS when connecting to the Docker socket and verify the server's certificate.
 
 ```text
 
