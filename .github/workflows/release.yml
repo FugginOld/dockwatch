@@ -40,7 +40,7 @@ jobs:
       # Build binary and stage it where dockers_v2 expects it
       - name: Build app
         run: |
-          go build -o dockwatch
+          CGO_ENABLED=0 go build -o dockwatch
           mkdir -p linux/amd64
           cp dockwatch linux/amd64/dockwatch
 
