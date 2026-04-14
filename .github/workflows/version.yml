@@ -23,7 +23,6 @@ jobs:
           tag_prefix: "v"
           major_pattern: "feat!:"
           minor_pattern: "feat:"
-          patch_pattern: "fix:"
 
       - name: Create tag
         run: |
