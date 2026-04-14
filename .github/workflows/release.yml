@@ -40,7 +40,7 @@ jobs:
       # Build binary and stage it where dockers_v2 expects it
       - name: Build app
         run: |
-          go build -o dockwatch
+          CGO_ENABLED=0 go build -o dockwatch
           mkdir -p linux/amd64
           cp dockwatch linux/amd64/dockwatch
 
@@ -51,8 +51,8 @@ jobs:
       # Health test container
       - name: Test container
         run: |
-          chmod +x .github/scripts/test-container.sh
-          .github/scripts/test-container.sh dockwatch:test
+          chmod +x scripts/test-container.sh
+          scripts/test-container.sh dockwatch:test
 
       # Only release if container is healthy
       - name: Run GoReleaser
