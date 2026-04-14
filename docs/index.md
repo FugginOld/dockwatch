@@ -8,8 +8,8 @@
 <p align="center">
   A container-based solution for automating Docker container base image updates.
   <br/><br/>
-  <a href="https://circleci.com/gh/fugginold/dockwatch">
-    <img alt="Circle CI" src="https://circleci.com/gh/fugginold/dockwatch.svg?style=shield" />
+  <a href="https://github.com/fugginold/dockwatch/actions/workflows/ci.yml">
+    <img alt="GitHub CI" src="https://github.com/fugginold/dockwatch/actions/workflows/ci.yml/badge.svg" />
   </a>
   <a href="https://codecov.io/gh/fugginold/dockwatch">
     <img alt="Codecov" src="https://codecov.io/gh/fugginold/dockwatch/branch/main/graph/badge.svg">
@@ -55,7 +55,6 @@ the following command:
 === "docker-compose.yml"
 
     ```yaml
-    version: "3"
     services:
       dockwatch:
         image: fugginold/dockwatch

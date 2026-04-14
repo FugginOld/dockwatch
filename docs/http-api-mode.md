@@ -8,8 +8,6 @@ Dockwatch provides an HTTP API mode that enables an HTTP endpoint that can be re
 To enable this mode, use the flag `--http-api-update`. For example, in a Docker Compose config file:
 
 ```yaml
-version: '3'
-
 services:
   app-monitored-by-dockwatch:
     image: myapps/monitored-by-dockwatch

@@ -1,7 +1,3 @@
-!!! warning "Experimental feature"
-    This feature was added in v1.0.4 and is still considered experimental. If you notice any strange behavior, please raise
-    a ticket in the repository issues.
-
 Metrics can be used to track how Dockwatch behaves over time.
 
 To use this feature, you have to set an [API token](arguments.md#http_api_token) and [enable the metrics API](arguments.md#http_api_metrics),

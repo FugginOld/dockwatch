@@ -1,17 +1,17 @@
 site_name: Dockwatch
-site_url: https://containrrr.dev/dockwatch/
+site_url: https://fugginold.github.io/dockwatch/
 repo_url: https://github.com/fugginold/dockwatch/
 edit_uri: edit/main/docs/
 theme:
   name: 'material'
   palette:
     - media: "(prefers-color-scheme: light)"
-      scheme: containrrr
+      scheme: dockwatch
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
-      scheme: containrrr-dark
+      scheme: dockwatch-dark
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
@@ -29,7 +29,7 @@ markdown_extensions:
     - pymdownx.magiclink:
         repo_url_shortener: True
         provider: github
-        user: containrrr
+        user: fugginold
         repo: dockwatch
     - pymdownx.saneheaders
     - pymdownx.tabbed:
@@ -48,6 +48,7 @@ nav:
   - 'Stop signals': 'stop-signals.md'
   - 'Lifecycle hooks': 'lifecycle-hooks.md'
   - 'Running multiple instances': 'running-multiple-instances.md'
+  - 'Interactive Shell': 'interactive-shell.md'
   - 'HTTP API Mode': 'http-api-mode.md'
   - 'Metrics': 'metrics.md'
 plugins:

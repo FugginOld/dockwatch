@@ -61,7 +61,7 @@ docker run --rm \
   --force-update
 ```
 
-## Install & Useage Instructions
+## Install & Usage Instructions
 
 ### Debian install
 

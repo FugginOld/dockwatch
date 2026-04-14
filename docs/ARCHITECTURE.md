@@ -40,7 +40,7 @@ Use explicit tags when deterministic architecture pinning is required by your de
 
 1. main initializes logger level and executes Cobra root command.
 2. PreRun resolves flags and env, configures logging, creates Docker client.
-3. Run chooses one-shot update or daemon mode.
+3. Run chooses one-shot update, interactive shell, or daemon mode.
 4. Daemon mode creates a schedule controller and optional HTTP API handlers.
 5. Scheduler and API both call the same update pipeline with lock protection.
 6. Update pipeline computes stale containers, orders dependencies, updates safely.
