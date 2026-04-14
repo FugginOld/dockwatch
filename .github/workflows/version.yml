@@ -24,7 +24,6 @@ jobs:
           major_pattern: "feat!:"
           minor_pattern: "feat:"
           patch_pattern: "fix:"
-          default_bump: patch
 
       - name: Create tag
         run: |
