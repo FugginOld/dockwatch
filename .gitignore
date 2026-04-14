@@ -21,3 +21,6 @@ docs/assets/*.wasm
 dockwatch_linux_*
 README*.preview.md
 README*.preview.html
+
+# Claude Code local settings
+.claude/settings.local.json
