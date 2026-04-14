@@ -1,3 +1,5 @@
+# Running Multiple Instances
+
 By default, Dockwatch will clean up other instances and won't allow multiple instances running on the same Docker host or swarm. It is possible to override this behavior by defining a [scope](arguments.md#filter_by_scope) to each running instance.
 
 !!! note

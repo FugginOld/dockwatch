@@ -1,3 +1,5 @@
+# Metrics
+
 Metrics can be used to track how Dockwatch behaves over time.
 
 To use this feature, you have to set an [API token](arguments.md#http_api_token) and [enable the metrics API](arguments.md#http_api_metrics),
@@ -5,15 +7,15 @@ as well as creating a port mapping for your container for port `8080`.
 
 The metrics API endpoint is `/v1/metrics`.
 
-## Available Metrics 
+## Available Metrics
 
-| Name                            | Type    | Description                                                                 |
-| ------------------------------- | ------- | --------------------------------------------------------------------------- |
-| `dockwatch_containers_scanned` | Gauge   | Number of containers scanned for changes by dockwatch during the last scan |
-| `dockwatch_containers_updated` | Gauge   | Number of containers updated by dockwatch during the last scan             |
-| `dockwatch_containers_failed`  | Gauge   | Number of containers where update failed during the last scan               |
-| `dockwatch_scans_total`        | Counter | Number of scans since the dockwatch started                                |
-| `dockwatch_scans_skipped`      | Counter | Number of skipped scans since dockwatch started                            |
+| Name | Type | Description |
+| --- | --- | --- |
+| `dockwatch_containers_scanned` | Gauge | Number of containers scanned for changes by dockwatch during the last scan |
+| `dockwatch_containers_updated` | Gauge | Number of containers updated by dockwatch during the last scan |
+| `dockwatch_containers_failed` | Gauge | Number of containers where update failed during the last scan |
+| `dockwatch_scans_total` | Counter | Number of scans since the dockwatch started |
+| `dockwatch_scans_skipped` | Counter | Number of skipped scans since dockwatch started |
 
 ## Example Prometheus `scrape_config`
 
