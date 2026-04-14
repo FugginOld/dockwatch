@@ -16,14 +16,14 @@ jobs:
 
       - name: Detect changed markdown files
         id: changed-markdown
-        uses: tj-actions/changed-files@v46
+        uses: tj-actions/changed-files@v47
         with:
           files: |
             **/*.md
           separator: "\n"
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
           cache: 'pip'
@@ -39,7 +39,7 @@ jobs:
 
       - name: Markdown lint
         if: steps.changed-markdown.outputs.any_changed == 'true'
-        uses: DavidAnson/markdownlint-cli2-action@v17
+        uses: DavidAnson/markdownlint-cli2-action@v23
         with:
           globs: ${{ steps.changed-markdown.outputs.all_changed_files }}
 
