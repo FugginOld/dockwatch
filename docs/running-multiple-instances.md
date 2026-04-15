@@ -1,4 +1,6 @@
-By default, Dockwatch will clean up other instances and won't allow multiple instances running on the same Docker host or swarm. It is possible to override this behavior by defining a [scope](https://containrrr.dev/dockwatch/arguments/#filter_by_scope) to each running instance.
+# Running Multiple Instances
+
+By default, Dockwatch will clean up other instances and won't allow multiple instances running on the same Docker host or swarm. It is possible to override this behavior by defining a [scope](arguments.md#filter-by-scope) to each running instance.
 
 !!! note
     - Multiple instances can't run with the same scope;
@@ -10,8 +12,6 @@ To define an instance monitoring scope, use the `--scope` argument or the `DOCKW
 For example, in a Docker Compose config file:
 
 ```yaml
-version: '3'
-
 services:
   app-with-scope:
     image: myapps/monitored-by-dockwatch

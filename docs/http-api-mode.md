@@ -1,15 +1,15 @@
+# HTTP API Mode
+
 Dockwatch provides an HTTP API mode that enables an HTTP endpoint that can be requested to trigger container updating. The current available endpoint list is:
 
--   `/v1/update` - triggers an update for all of the containers monitored by this Dockwatch instance.
--   `/v1/schedule` - gets or updates the periodic cron schedule while dockwatch is running.
+- `/v1/update` - triggers an update for all of the containers monitored by this Dockwatch instance.
+- `/v1/schedule` - gets or updates the periodic cron schedule while dockwatch is running.
 
 ---
 
 To enable this mode, use the flag `--http-api-update`. For example, in a Docker Compose config file:
 
 ```yaml
-version: '3'
-
 services:
   app-monitored-by-dockwatch:
     image: myapps/monitored-by-dockwatch

@@ -316,7 +316,7 @@ Environment Variable: DOCKWATCH_DISABLE_CONTAINERS
 ## Without updating containers
 
 Will only monitor for new images and invoke
-the [pre-check/post-check hooks](https://containrrr.dev/dockwatch/lifecycle-hooks/), but will **not** update the
+the [pre-check/post-check hooks](lifecycle-hooks.md), but will **not** update the
 containers.
 
 !!! note
@@ -440,7 +440,7 @@ Environment Variable: N/A
 ## HTTP API Mode
 
 Runs Dockwatch in HTTP API mode, only allowing image updates to be triggered by an HTTP request.
-For details see [HTTP API](https://containrrr.dev/dockwatch/http-api-mode).
+For details see [HTTP API](http-api-mode.md).
 
 ```text
 
@@ -481,7 +481,7 @@ Environment Variable: DOCKWATCH_HTTP_API_PERIODIC_POLLS
 ## Filter by scope
 
 Update containers that have a `com.centurylinklabs.dockwatch.scope` label set with the same value as the given argument.
-This enables [running multiple instances](https://containrrr.dev/dockwatch/running-multiple-instances).
+This enables [running multiple instances](running-multiple-instances.md).
 
 !!! note "Filter by lack of scope"
     If you want other instances of dockwatch to ignore the scoped containers, set this argument to `none`.
