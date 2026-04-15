@@ -45,6 +45,29 @@ docker ps --filter name=dockwatch
 docker logs --tail=100 dockwatch
 ```
 
+Start Dockwatch with an interactive shell (`dockwatch>` prompt):
+
+```bash
+docker run --rm -it \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  fugginold/dockwatch:latest
+```
+
+Run it long-term and attach to the interactive shell later:
+
+```bash
+docker rm -f dockwatch 2>/dev/null || true
+docker run -d -it \
+  --name dockwatch \
+  --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  fugginold/dockwatch:latest
+
+docker attach dockwatch
+```
+
+Detach from `docker attach` without stopping the container: press `Ctrl-p` then `Ctrl-q`.
+
 Run one immediate check and exit:
 
 ```bash

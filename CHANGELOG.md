@@ -1,5 +1,241 @@
 # Changelog
 
+<!-- BEGIN UNRELEASED -->
+## Unreleased
+
+_Last updated: 2026-04-15 (UTC)._
+
+### Changed
+
+- Changelog automation enabled for `main`.
+
+---
+<!-- END UNRELEASED -->
+
+## 0.3.23 - 2026-04-14
+
+### Fixed
+
+- Avoid entering interactive shell mode in non-interactive containers (prevents restart loops when stdin is not a real TTY).
+
+### Added
+
+- Added regression tests for interactive input detection.
+
+### Changed
+
+- Updated interactive shell documentation to clarify how to start Dockwatch with a `dockwatch>` prompt.
+
+---
+
+## 0.3.22 - 2026-04-14
+
+### Fixed
+
+- Stamp release builds with the actual version tag instead of the stale fallback version.
+
+---
+
+## 0.3.21 - 2026-04-14
+
+### Fixed
+
+- Updated `.gitignore` to avoid committing local/assistant settings.
+
+---
+
+## 0.3.20 - 2026-04-14
+
+### Fixed
+
+- Updated `.gitignore` to exclude an additional generated/local file.
+
+---
+
+## 0.3.19 - 2026-04-14
+
+### Changed
+
+- Release workflow updates.
+
+---
+
+## 0.3.18 - 2026-04-14
+
+### Fixed
+
+- Bumped `goreleaser/goreleaser-action` to `v6` to support GoReleaser v2 config.
+
+---
+
+## 0.3.17 - 2026-04-13
+
+### Fixed
+
+- Auto-release pipeline and container test fixes.
+
+---
+
+## 0.3.16 - 2026-04-13
+
+### Fixed
+
+- Updated `scripts/test-container.sh` for the current image name.
+
+---
+
+## 0.3.15 - 2026-04-13
+
+### Fixed
+
+- Ensured `CGO_ENABLED=0` is set during release builds.
+
+---
+
+## 0.3.14 - 2026-04-13
+
+### Fixed
+
+- Fixed release workflow path issues.
+
+---
+
+## 0.3.13 - 2026-04-13
+
+### Changed
+
+- Updated the `docker-dev` workflow.
+
+---
+
+## 0.3.12 - 2026-04-13
+
+### Changed
+
+- Updated the `docker-dev` workflow.
+
+---
+
+## 0.3.11 - 2026-04-13
+
+### Changed
+
+- Removed the devcontainer and fixed workflow secrets handling.
+
+---
+
+## 0.3.10 - 2026-04-13
+
+### Changed
+
+- Default bymp.
+
+---
+
+## 0.3.9 - 2026-04-13
+
+### Changed
+
+- chore(deps): bump `github.com/docker/cli` in the go-dependencies group.
+
+---
+
+## 0.3.8 - 2026-04-13
+
+### Changed
+
+- chore(deps): bump `DavidAnson/markdownlint-cli2-action` from 17 to 23.
+
+---
+
+## 0.3.7 - 2026-04-13
+
+### Changed
+
+- chore(deps): bump `codecov/codecov-action` from 3 to 6.
+
+---
+
+## 0.3.6 - 2026-04-13
+
+### Changed
+
+- chore(deps): bump `actions/setup-python` from 5 to 6.
+
+---
+
+## 0.3.5 - 2026-04-13
+
+### Changed
+
+- chore(deps): bump `tj-actions/changed-files` from 46 to 47.
+
+---
+
+## 0.3.4 - 2026-04-13
+
+### Changed
+
+- chore(deps): bump `github/codeql-action` from 3 to 4.
+
+---
+
+## 0.3.3 - 2026-04-12
+
+### Fixed
+
+- Replaced deprecated Docker API types and added a missing vulnerability allowlist entry.
+
+---
+
+## 0.3.2 - 2026-04-12
+
+### Fixed
+
+- Resolved GoReleaser v2 deprecation warnings.
+
+---
+
+## 0.3.1 - 2026-04-12
+
+### Fixed
+
+- Restored GoReleaser builds/archives to resume asset generation.
+
+---
+
+## 0.3.0 - 2026-04-12
+
+### Added
+
+- Added release configuration to `.goreleaser.yml`.
+
+---
+
+## 0.2.3 - 2026-04-12
+
+### Removed
+
+- Removed accidentally committed `.claude/worktrees` directory.
+
+---
+
+## 0.2.2 - 2026-04-12
+
+### Added
+
+- Added Claude worktrees metadata.
+
+---
+
+## 0.2.1 - 2026-04-12
+
+### Fixed
+
+- Addressed code review issues across security, reliability, and correctness.
+
+---
+
 ## 0.2.0 - 2026-04-11
 
 ### Added
