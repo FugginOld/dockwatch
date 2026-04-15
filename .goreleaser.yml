@@ -12,6 +12,8 @@ builds:
     binary: dockwatch
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/fugginold/dockwatch/internal/meta.Version={{ .Version }}
     goos:
       - linux
       - darwin
