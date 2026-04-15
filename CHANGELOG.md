@@ -3,15 +3,14 @@
 <!-- BEGIN UNRELEASED -->
 ## Unreleased
 
-_Last updated: 2026-04-15 (UTC)._
+_Last updated: 2026-04-15 (UTC). Changes since v0.3.25._
 
 ### Changed
 
-- Changelog automation enabled for `main`.
+- No unreleased changes.
 
 ---
 <!-- END UNRELEASED -->
-
 ## 0.3.23 - 2026-04-14
 
 ### Fixed
