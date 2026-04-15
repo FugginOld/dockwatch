@@ -17,7 +17,7 @@ dockwatch>
 The following commands can currently be executed from within the interactive shell:
 
 - **`schedule <cron spec>`**  
-  Modifies the container update schedule at runtime. If no cron specification is provided, it acts as a getter and returns your currently configured schedule.  
+  Modifies the container update schedule at runtime and saves it to the runtime config file. If no cron specification is provided, it acts as a getter and returns your currently configured schedule.  
   _Example:_ `schedule @every 5m`
 
 - **`update`**  

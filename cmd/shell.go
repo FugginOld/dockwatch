@@ -7,13 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fugginold/dockwatch/pkg/metrics"
 	t "github.com/fugginold/dockwatch/pkg/types"
 	log "github.com/sirupsen/logrus"
 )
 
 // runShell provides an interactive prompt when the system is attached to a TTY.
-func runShell(scheduleCtrl *scheduleController, updateLock chan bool, filter t.Filter) {
+func runShell(scheduleCtrl *scheduleController, updateLock chan bool, filter t.Filter, configFile string) {
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Print("dockwatch> ")
 
@@ -29,7 +28,7 @@ func runShell(scheduleCtrl *scheduleController, updateLock chan bool, filter t.F
 			case "schedule":
 				if len(parts) > 1 {
 					spec := strings.Join(parts[1:], " ")
-					nextRun, err := scheduleCtrl.Set(spec)
+					nextRun, err := setScheduleAndPersist(scheduleCtrl, spec, configFile)
 					if err != nil {
 						log.Errorf("Error setting schedule: %v", err)
 					} else {
@@ -49,10 +48,7 @@ func runShell(scheduleCtrl *scheduleController, updateLock chan bool, filter t.F
 				select {
 				case v := <-updateLock:
 					log.Info("Starting manual update...")
-					metric := runUpdates(filter)
-					if metric != nil {
-						metrics.RegisterScan(metric)
-					}
+					runUpdates(filter)
 					log.Info("Manual update complete.")
 					updateLock <- v
 				default:

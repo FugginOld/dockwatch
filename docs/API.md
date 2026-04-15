@@ -73,16 +73,6 @@ curl -X PUT -H "Authorization: Bearer ${DW_TOKEN}" "http://localhost:8080/v1/sch
 
 Invalid schedule returns 400 bad request.
 
-### GET /v1/metrics
-
-Prometheus metrics endpoint when metrics API is enabled.
-
-Example:
-
-```bash
-curl -H "Authorization: Bearer ${DW_TOKEN}" http://localhost:8080/v1/metrics
-```
-
 ## Enable API Mode
 
 ```bash
@@ -96,7 +86,6 @@ docker run -d \
   fugginold/dockwatch:latest \
   --http-api-update \
   --http-api-periodic-polls \
-  --http-api-metrics \
   --schedule "@every 24h"
 ```
 

@@ -30,8 +30,6 @@ The script prompts for a schedule and runs Dockwatch with `--schedule <value>`.
 
 If you prefer manual installation, run Dockwatch with API-version auto-detection to avoid Docker client/server API mismatch errors:
 
-
-
 ```bash
 docker rm -f dockwatch 2>/dev/null || true
 DW_API_VERSION=$(docker version --format '{{.Server.APIVersion}}')
@@ -40,10 +38,13 @@ docker run -d \
   --name dockwatch \
   --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v dockwatch-config:/config \
   -e DOCKER_API_VERSION="${DW_API_VERSION}" \
   fugginold/dockwatch:latest \
   --schedule "@every 24h"
 ```
+
+Dockwatch performs one update check immediately at startup, then continues on the configured schedule. Runtime schedule changes are saved in `/config/dockwatch.json`; mount `/config` if you want those changes to survive container recreation.
 
 ### Run Dockwatch (Docker Compose)
 
@@ -56,8 +57,12 @@ services:
     command: --schedule "@every 24h"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - dockwatch-config:/config
     environment:
       DOCKER_API_VERSION: "${DW_API_VERSION}"
+
+volumes:
+  dockwatch-config:
 ```
 
 Then run:

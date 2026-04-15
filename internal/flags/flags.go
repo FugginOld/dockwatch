@@ -50,6 +50,12 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"The cron expression which defines when to update")
 
 	flags.StringP(
+		"config-file",
+		"",
+		envString("DOCKWATCH_CONFIG_FILE"),
+		"Path to the Dockwatch runtime config file")
+
+	flags.StringP(
 		"cron",
 		"",
 		"",
@@ -175,12 +181,6 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"",
 		envBool("DOCKWATCH_HTTP_API_UPDATE"),
 		"Runs Dockwatch in HTTP API mode, so that image updates must to be triggered by a request")
-	flags.BoolP(
-		"http-api-metrics",
-		"",
-		envBool("DOCKWATCH_HTTP_API_METRICS"),
-		"Runs Dockwatch with the Prometheus metrics API enabled")
-
 	flags.StringP(
 		"http-api-token",
 		"",
@@ -259,6 +259,7 @@ func SetDefaults() {
 	viper.SetDefault("DOCKWATCH_TIMEOUT", time.Second*10)
 	viper.SetDefault("DOCKWATCH_LOG_LEVEL", "info")
 	viper.SetDefault("DOCKWATCH_LOG_FORMAT", "auto")
+	viper.SetDefault("DOCKWATCH_CONFIG_FILE", "/config/dockwatch.json")
 }
 
 // EnvConfig translates the command-line options into environment variables

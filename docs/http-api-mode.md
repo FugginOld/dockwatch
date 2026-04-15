@@ -20,6 +20,7 @@ services:
     image: fugginold/dockwatch
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - dockwatch-config:/config
     command: --debug --http-api-update
     environment:
       - DOCKWATCH_HTTP_API_TOKEN=mytoken
@@ -27,6 +28,9 @@ services:
       - "com.centurylinklabs.dockwatch.enable=false"
     ports:
       - 8080:8080
+
+volumes:
+  dockwatch-config:
 ```
 
 By default, enabling this mode prevents periodic polls (i.e. what is specified using `--interval` or `--schedule`). To run periodic updates regardless, pass `--http-api-periodic-polls`.
@@ -60,6 +64,8 @@ Update the schedule without restarting dockwatch:
 ```bash
 curl -X POST -H "Authorization: Bearer mytoken" "localhost:8080/v1/schedule?schedule=@every%2030m"
 ```
+
+Schedule updates are saved to the runtime config file, which defaults to `/config/dockwatch.json`.
 
 `cron` can be used as a query alias for `schedule`:
 

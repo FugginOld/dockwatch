@@ -13,6 +13,7 @@ Scheduling and update behavior:
 
 - DOCKWATCH_POLL_INTERVAL
 - DOCKWATCH_SCHEDULE
+- DOCKWATCH_CONFIG_FILE
 - DOCKWATCH_TIMEOUT
 - DOCKWATCH_NO_PULL
 - DOCKWATCH_NO_RESTART
@@ -33,12 +34,11 @@ Targeting and filtering:
 - DOCKWATCH_SCOPE
 - DOCKWATCH_LABEL_TAKE_PRECEDENCE
 
-HTTP API and metrics:
+HTTP API:
 
 - DOCKWATCH_HTTP_API_UPDATE
 - DOCKWATCH_HTTP_API_TOKEN
 - DOCKWATCH_HTTP_API_PERIODIC_POLLS
-- DOCKWATCH_HTTP_API_METRICS
 
 Logging and output:
 
@@ -56,6 +56,7 @@ Core:
 - --schedule, -s
 - --cron
 - --interval, -i
+- --config-file
 - --run-once, -R
 - --force-update
 - --stop-timeout, -t
@@ -83,12 +84,11 @@ Docker client:
 - --api-version, -a
 - --registry-tls-skip-verify
 
-API and observability:
+API:
 
 - --http-api-update
 - --http-api-token
 - --http-api-periodic-polls
-- --http-api-metrics
 - --health-check
 
 Logging:
@@ -136,3 +136,5 @@ Runtime update through API:
 ```bash
 curl -X POST -H "Authorization: Bearer ${DW_TOKEN}" "http://localhost:8080/v1/schedule?schedule=@every%2030m"
 ```
+
+Runtime schedule changes are persisted to the config file, which defaults to `/config/dockwatch.json`.

@@ -11,5 +11,4 @@ CONTAINER ID   IMAGE                   STATUS          PORTS                    
 6cc4d2a9d1a5   fugginold/dockwatch   Up 15 minutes                            dockwatch
 ```
 
-Every day dockwatch will pull the latest _centurylink/wetty-cli_ image and compare it to the one that was used to run the "wetty" container. If it sees that the image has changed it will stop/remove the "wetty" container and then restart it using the new image and the same `docker run` options that were used to start the container initially (in this case, that would include the `-p 8080:3000` port mapping).
-
+At startup, dockwatch performs one immediate update check. After that, it follows the configured schedule, pulling the latest _centurylink/wetty-cli_ image and comparing it to the one that was used to run the "wetty" container. If it sees that the image has changed it will stop/remove the "wetty" container and then restart it using the new image and the same `docker run` options that were used to start the container initially (in this case, that would include the `-p 8080:3000` port mapping).

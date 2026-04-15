@@ -28,6 +28,7 @@ the following command:
     $ docker run -d \
     --name dockwatch \
     -v /var/run/docker.sock:/var/run/docker.sock \
+    -v dockwatch-config:/config \
     fugginold/dockwatch
     ```
 
@@ -39,4 +40,8 @@ the following command:
         image: fugginold/dockwatch
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
+          - dockwatch-config:/config
+
+    volumes:
+      dockwatch-config:
     ```

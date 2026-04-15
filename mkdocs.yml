@@ -50,6 +50,5 @@ nav:
   - 'Running multiple instances': 'running-multiple-instances.md'
   - 'Interactive Shell': 'interactive-shell.md'
   - 'HTTP API Mode': 'http-api-mode.md'
-  - 'Metrics': 'metrics.md'
 plugins:
     - search

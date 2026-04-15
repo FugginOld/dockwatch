@@ -8,7 +8,6 @@
 - Viper for environment variable binding and defaults
 - robfig/cron for scheduled update loops
 - Logrus for structured logging
-- Prometheus client for metrics endpoint integration
 
 ## Repository Structure
 
@@ -19,7 +18,6 @@
 - pkg/container: Docker client abstraction and operations
 - pkg/filters: container target selection and label filtering
 - pkg/lifecycle: hook execution model
-- pkg/metrics: scan result metrics model
 - pkg/registry: digest and manifest checks, auth helpers
 - pkg/session: per-run report assembly
 - pkg/sorter: dependency-aware container ordering
@@ -41,10 +39,10 @@ Use explicit tags when deterministic architecture pinning is required by your de
 1. main initializes logger level and executes Cobra root command.
 2. PreRun resolves flags and env, configures logging, creates Docker client.
 3. Run chooses one-shot update, interactive shell, or daemon mode.
-4. Daemon mode creates a schedule controller and optional HTTP API handlers.
-5. Scheduler and API both call the same update pipeline with lock protection.
-6. Update pipeline computes stale containers, orders dependencies, updates safely.
-7. Metrics are registered after each update attempt.
+4. Daemon mode runs an immediate update check before scheduled operation begins.
+5. Daemon mode creates a schedule controller and optional HTTP API handlers.
+6. Scheduler and API both call the same update pipeline with lock protection.
+7. Update pipeline computes stale containers, orders dependencies, updates safely.
 
 ## Dependency Sorting
 

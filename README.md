@@ -23,7 +23,6 @@ Core capabilities:
 - One-shot update mode for immediate checks
 - Optional HTTP API for update and schedule control
 - Interactive shell environment for on-the-fly execution
-- Prometheus metrics endpoint
 - Dependency-aware container restart ordering
 
 ## Quick Start Instructions
@@ -35,6 +34,7 @@ docker run -d \
   --name dockwatch \
   --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v dockwatch-config:/config \
   fugginold/dockwatch:latest
 ```
 
@@ -50,6 +50,7 @@ Start Dockwatch with an interactive shell (`dockwatch>` prompt):
 ```bash
 docker run --rm -it \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v dockwatch-config:/config \
   fugginold/dockwatch:latest
 ```
 
@@ -61,6 +62,7 @@ docker run -d -it \
   --name dockwatch \
   --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v dockwatch-config:/config \
   fugginold/dockwatch:latest
 
 docker attach dockwatch
@@ -115,6 +117,7 @@ docker run -d \
   --name dockwatch \
   --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v dockwatch-config:/config \
   -e DOCKER_API_VERSION="${DW_API_VERSION}" \
   fugginold/dockwatch:latest \
   --schedule "${DW_SCHEDULE}"
@@ -141,6 +144,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8080:8080 \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v dockwatch-config:/config \
   -e DOCKER_API_VERSION="${DW_API_VERSION}" \
   -e DOCKWATCH_HTTP_API_TOKEN="${DW_TOKEN}" \
   fugginold/dockwatch:latest \
@@ -167,7 +171,6 @@ curl -X POST -H "Authorization: Bearer ${DW_TOKEN}" "http://localhost:8080/v1/sc
 - /docs/arguments.md
 - /docs/installation.md
 - /docs/http-api-mode.md
-- /docs/metrics.md
 - /docs/lifecycle-hooks.md
 - /docs/container-selection.md
 - /docs/running-multiple-instances.md

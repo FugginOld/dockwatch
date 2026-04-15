@@ -496,19 +496,6 @@ Environment Variable: DOCKWATCH_SCOPE
 
 ```
 
-## HTTP API Metrics
-
-Enables a metrics endpoint, exposing prometheus metrics via HTTP. See [Metrics](metrics.md) for details.  
-
-```text
-
-            Argument: --http-api-metrics
-Environment Variable: DOCKWATCH_HTTP_API_METRICS
-                Type: Boolean
-             Default: false
-
-```
-
 ## Scheduling
 
 [Cron expression](https://pkg.go.dev/github.com/robfig/cron@v1.2.0?tab=doc#hdr-CRON_Expression_Format) in 6 fields (rather than the traditional 5) which defines when and how often to check for new images. Either `--interval` or the schedule expression
@@ -520,6 +507,19 @@ can be defined, but not both. An example: `--schedule "0 0 4 * * *"`
 Environment Variable: DOCKWATCH_SCHEDULE
                 Type: String
              Default: -
+
+```
+
+## Runtime config file
+
+Path to the runtime config file used to persist interactive schedule changes.
+
+```text
+
+            Argument: --config-file
+Environment Variable: DOCKWATCH_CONFIG_FILE
+                Type: String
+             Default: /config/dockwatch.json
 
 ```
 

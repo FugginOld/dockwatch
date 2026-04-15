@@ -16,17 +16,16 @@ import (
 	"github.com/fugginold/dockwatch/internal/flags"
 	"github.com/fugginold/dockwatch/internal/meta"
 	"github.com/fugginold/dockwatch/pkg/api"
-	apiMetrics "github.com/fugginold/dockwatch/pkg/api/metrics"
 	apiSchedule "github.com/fugginold/dockwatch/pkg/api/schedule"
 	"github.com/fugginold/dockwatch/pkg/api/update"
 	"github.com/fugginold/dockwatch/pkg/container"
 	"github.com/fugginold/dockwatch/pkg/filters"
-	"github.com/fugginold/dockwatch/pkg/metrics"
 	t "github.com/fugginold/dockwatch/pkg/types"
 	"github.com/robfig/cron"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // runConfig holds all runtime configuration populated during PreRun.
@@ -34,6 +33,7 @@ import (
 type runConfig struct {
 	client            container.Client
 	scheduleSpec      string
+	configFile        string
 	cleanup           bool
 	noRestart         bool
 	noPull            bool
@@ -88,6 +88,14 @@ func PreRun(cmd *cobra.Command, _ []string) {
 	}
 
 	cfg.scheduleSpec, _ = f.GetString("schedule")
+	cfg.configFile, _ = f.GetString("config-file")
+	if !scheduleWasExplicitlySet(f) {
+		if persistedSchedule, found, err := loadScheduleConfig(cfg.configFile); err != nil {
+			log.WithError(err).Warn("Unable to load schedule config")
+		} else if found {
+			cfg.scheduleSpec = persistedSchedule
+		}
+	}
 
 	flags.GetSecretsFromFiles(cmd)
 	rf := flags.ReadFlags(cmd)
@@ -146,7 +154,6 @@ func Run(c *cobra.Command, names []string) {
 	runOnce, _ := c.PersistentFlags().GetBool("run-once")
 	forceUpdate, _ := c.PersistentFlags().GetBool("force-update")
 	enableUpdateAPI, _ := c.PersistentFlags().GetBool("http-api-update")
-	enableMetricsAPI, _ := c.PersistentFlags().GetBool("http-api-metrics")
 	unblockHTTPAPI, _ := c.PersistentFlags().GetBool("http-api-periodic-polls")
 	apiToken, _ := c.PersistentFlags().GetString("http-api-token")
 	healthCheck, _ := c.PersistentFlags().GetBool("health-check")
@@ -188,6 +195,9 @@ func Run(c *cobra.Command, names []string) {
 	// The lock is shared between the scheduler and the HTTP API. It only allows one update to run at a time.
 	updateLock := make(chan bool, 1)
 	updateLock <- true
+
+	runInitialUpdate(updateLock, filter)
+
 	periodicEnabled := !enableUpdateAPI || unblockHTTPAPI
 
 	isInteractive := isInteractiveInput(os.Stdin, os.Stdout)
@@ -214,8 +224,7 @@ func Run(c *cobra.Command, names []string) {
 
 	if enableUpdateAPI {
 		updateHandler := update.New(func(images []string) {
-			metric := runUpdates(filters.FilterByImage(images, filter))
-			metrics.RegisterScan(metric)
+			runUpdates(filters.FilterByImage(images, filter))
 		}, updateLock)
 		httpAPI.RegisterFunc(updateHandler.Path, updateHandler.Handle)
 
@@ -223,15 +232,12 @@ func Run(c *cobra.Command, names []string) {
 			scheduleHandler := apiSchedule.New(
 				func() string { return scheduleCtrl.Current() },
 				func() time.Time { return scheduleCtrl.NextRun() },
-				func(spec string) (time.Time, error) { return scheduleCtrl.Set(spec) },
+				func(spec string) (time.Time, error) {
+					return setScheduleAndPersist(scheduleCtrl, spec, cfg.configFile)
+				},
 			)
 			httpAPI.RegisterFunc(scheduleHandler.Path, scheduleHandler.Handle)
 		}
-	}
-
-	if enableMetricsAPI {
-		metricsHandler := apiMetrics.New()
-		httpAPI.RegisterHandler(metricsHandler.Path, metricsHandler.Handle)
 	}
 
 	apiShouldBlock := enableUpdateAPI && !unblockHTTPAPI && !isInteractive
@@ -241,7 +247,7 @@ func Run(c *cobra.Command, names []string) {
 
 	if isInteractive {
 		go func() {
-			runShell(scheduleCtrl, updateLock, filter)
+			runShell(scheduleCtrl, updateLock, filter, cfg.configFile)
 			// Trigger a clean shutdown when the shell exits
 			p, _ := os.FindProcess(os.Getpid())
 			_ = p.Signal(os.Interrupt)
@@ -386,6 +392,26 @@ func newScheduleController(lock chan bool, filter t.Filter) *scheduleController 
 	}
 }
 
+func runInitialUpdate(updateLock chan bool, filter t.Filter) {
+	chanValue := <-updateLock
+	defer func() { updateLock <- chanValue }()
+
+	log.Info("Running initial update check...")
+	runUpdates(filter)
+	log.Info("Initial update check complete.")
+}
+
+func setScheduleAndPersist(scheduleCtrl *scheduleController, spec string, configFile string) (time.Time, error) {
+	nextRun, err := scheduleCtrl.Set(spec)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if err := saveScheduleConfig(configFile, spec); err != nil {
+		log.WithError(err).Warn("Unable to save schedule config")
+	}
+	return nextRun, nil
+}
+
 func (c *scheduleController) Set(spec string) (time.Time, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -395,10 +421,8 @@ func (c *scheduleController) Set(spec string) (time.Time, error) {
 		select {
 		case v := <-c.lock:
 			defer func() { c.lock <- v }()
-			metric := runUpdates(c.filter)
-			metrics.RegisterScan(metric)
+			runUpdates(c.filter)
 		default:
-			metrics.RegisterScan(nil)
 			log.Debug("Skipped another update already running.")
 		}
 
@@ -451,7 +475,13 @@ func (c *scheduleController) Stop() {
 	}
 }
 
-func runUpdates(filter t.Filter) *metrics.Metric {
+type updateSummary struct {
+	Scanned int
+	Updated int
+	Failed  int
+}
+
+func runUpdates(filter t.Filter) updateSummary {
 	updateParams := t.UpdateParams{
 		Filter:          filter,
 		Cleanup:         cfg.cleanup,
@@ -467,11 +497,29 @@ func runUpdates(filter t.Filter) *metrics.Metric {
 	if err != nil {
 		log.Error(err)
 	}
-	metricResults := metrics.NewMetric(result)
+	summary := updateSummary{
+		Scanned: len(result.Scanned()),
+		// Note: This is for backwards compatibility. Ideally, stale containers should be counted separately.
+		Updated: len(result.Updated()) + len(result.Stale()),
+		Failed:  len(result.Failed()),
+	}
 	log.WithFields(log.Fields{
-		"Scanned": metricResults.Scanned,
-		"Updated": metricResults.Updated,
-		"Failed":  metricResults.Failed,
+		"Scanned": summary.Scanned,
+		"Updated": summary.Updated,
+		"Failed":  summary.Failed,
 	}).Info("Session done")
-	return metricResults
+	return summary
+}
+
+func scheduleWasExplicitlySet(flags *pflag.FlagSet) bool {
+	if flags.Changed("schedule") || flags.Changed("cron") || flags.Changed("interval") {
+		return true
+	}
+	if _, ok := os.LookupEnv("DOCKWATCH_SCHEDULE"); ok {
+		return true
+	}
+	if _, ok := os.LookupEnv("DOCKWATCH_POLL_INTERVAL"); ok {
+		return true
+	}
+	return false
 }
