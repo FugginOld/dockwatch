@@ -2,7 +2,7 @@
 
 Metrics can be used to track how Dockwatch behaves over time.
 
-To use this feature, you have to set an [API token](arguments.md#http_api_token) and [enable the metrics API](arguments.md#http_api_metrics),
+To use this feature, you have to set an [API token](arguments.md#http-api-token) and [enable the metrics API](arguments.md#http-api-metrics),
 as well as creating a port mapping for your container for port `8080`.
 
 The metrics API endpoint is `/v1/metrics`.

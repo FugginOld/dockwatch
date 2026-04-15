@@ -32,7 +32,7 @@ If you need to exclude some containers, set the _com.centurylinklabs.dockwatch.e
           - "com.centurylinklabs.dockwatch.enable=false"
     ```
 
-If instead you want to [only include containers with the enable label](arguments.md#filter_by_enable_label), pass the `--label-enable` flag or the `DOCKWATCH_LABEL_ENABLE` environment variable on startup for dockwatch and set the _com.centurylinklabs.dockwatch.enable_ label with a value of `true` on the containers you want to watch.
+If instead you want to [only include containers with the enable label](arguments.md#filter-by-enable-label), pass the `--label-enable` flag or the `DOCKWATCH_LABEL_ENABLE` environment variable on startup for dockwatch and set the _com.centurylinklabs.dockwatch.enable_ label with a value of `true` on the containers you want to watch.
 
 === "dockerfile"
 
@@ -78,4 +78,4 @@ Or, it can be specified as part of the `docker run` command line:
 docker run -d --label=com.centurylinklabs.dockwatch.monitor-only=true someimage
 ```
 
-When the label is specified on a container, dockwatch treats that container exactly as if [`DOCKWATCH_MONITOR_ONLY`](arguments.md#without_updating_containers) was set, but the effect is limited to the individual container.
+When the label is specified on a container, dockwatch treats that container exactly as if [`DOCKWATCH_MONITOR_ONLY`](arguments.md#without-updating-containers) was set, but the effect is limited to the individual container.
