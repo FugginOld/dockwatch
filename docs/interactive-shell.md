@@ -4,7 +4,7 @@ Dockwatch ships natively with an interactive command-line shell environment. Thi
 
 ## Automatic Activation
 
-There are no special flags or configurations required to use the shell. By default, Dockwatch will use standard `os.Stat` checks to determine if the environment standard input is tied to an interactive TTY.
+There are no special flags or configurations required to use the shell. By default, Dockwatch checks whether standard input is attached to a real interactive TTY.
 
 If it detects an interactive terminal (e.g., you ran the binary directly from Bash/PowerShell or ran `docker run -it`), it will automatically start the interactive shell:
 

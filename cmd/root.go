@@ -190,8 +190,7 @@ func Run(c *cobra.Command, names []string) {
 	updateLock <- true
 	periodicEnabled := !enableUpdateAPI || unblockHTTPAPI
 
-	stat, _ := os.Stdin.Stat()
-	isInteractive := (stat.Mode() & os.ModeCharDevice) != 0
+	isInteractive := isInteractiveInput(os.Stdin, os.Stdout)
 
 	var scheduleCtrl *scheduleController
 	if periodicEnabled || isInteractive {
@@ -355,6 +354,21 @@ func waitForInterrupt() {
 	signal.Notify(interrupt, syscall.SIGTERM)
 
 	<-interrupt
+}
+
+func isInteractiveInput(stdin *os.File, stdout *os.File) bool {
+	if stdin == nil || stdout == nil {
+		return false
+	}
+	stdinStat, err := stdin.Stat()
+	if err != nil {
+		return false
+	}
+	stdoutStat, err := stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return (stdinStat.Mode()&os.ModeCharDevice) != 0 && (stdoutStat.Mode()&os.ModeCharDevice) != 0
 }
 
 type scheduleController struct {
