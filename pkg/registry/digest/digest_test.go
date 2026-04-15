@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fugginold/dockwatch/internal/actions/mocks"
+	"github.com/fugginold/dockwatch/internal/meta"
 	"github.com/fugginold/dockwatch/pkg/registry/digest"
 	wtTypes "github.com/fugginold/dockwatch/pkg/types"
 	. "github.com/onsi/ginkgo"
@@ -110,7 +111,7 @@ var _ = Describe("Digests", func() {
 			server.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyHeader(http.Header{
-						"User-Agent": []string{"Dockwatch/v0.2.0"},
+						"User-Agent": []string{meta.UserAgent},
 					}),
 					ghttp.RespondWith(http.StatusOK, "", http.Header{
 						digest.ContentDigestHeader: []string{

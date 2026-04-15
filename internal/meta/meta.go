@@ -2,7 +2,7 @@ package meta
 
 var (
 	// Version is the compile-time set version of Dockwatch
-	Version = "v0.2.0"
+	Version = "dev"
 
 	// UserAgent is the http client identifier derived from Version
 	UserAgent string

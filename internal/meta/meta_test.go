@@ -9,7 +9,8 @@ import (
 )
 
 func TestVersion_DefaultValue(t *testing.T) {
-	assert.Equal(t, "v0.2.0", meta.Version)
+	assert.NotEmpty(t, meta.Version)
+	assert.NotEqual(t, "v0.2.0", meta.Version)
 }
 
 func TestUserAgent_ContainsVersion(t *testing.T) {

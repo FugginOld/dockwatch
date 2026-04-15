@@ -47,7 +47,7 @@ jobs:
       # Build binary and stage it where dockers_v2 expects it
       - name: Build app
         run: |
-          CGO_ENABLED=0 go build -o dockwatch
+          CGO_ENABLED=0 go build -ldflags "-X github.com/fugginold/dockwatch/internal/meta.Version=${GITHUB_REF_NAME}" -o dockwatch
           mkdir -p linux/amd64
           cp dockwatch linux/amd64/dockwatch
 
