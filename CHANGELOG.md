@@ -3,15 +3,14 @@
 <!-- BEGIN UNRELEASED -->
 ## Unreleased
 
-_Last updated: 2026-04-15 (UTC)._
+_Last updated: 2026-04-21 (UTC). Changes since v0.3.31._
 
 ### Changed
 
-- Changelog automation enabled for `main`.
+- chore(deps): bump docker/setup-buildx-action from 3 to 4
 
 ---
 <!-- END UNRELEASED -->
-
 ## 0.3.23 - 2026-04-14
 
 ### Fixed
