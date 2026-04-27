@@ -1,7 +1,7 @@
 # Changelog
 
 <!-- BEGIN UNRELEASED -->
-## Unreleased
+## [Unreleased]
 
 _Last updated: 2026-04-15 (UTC)._
 
@@ -12,7 +12,7 @@ _Last updated: 2026-04-15 (UTC)._
 ---
 <!-- END UNRELEASED -->
 
-## 0.3.23 - 2026-04-14
+## [0.3.23] - 2026-04-14
 
 ### Fixed
 
@@ -28,7 +28,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.22 - 2026-04-14
+## [0.3.22] - 2026-04-14
 
 ### Fixed
 
@@ -36,7 +36,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.21 - 2026-04-14
+## [0.3.21] - 2026-04-14
 
 ### Fixed
 
@@ -44,7 +44,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.20 - 2026-04-14
+## [0.3.20] - 2026-04-14
 
 ### Fixed
 
@@ -52,7 +52,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.19 - 2026-04-14
+## [0.3.19] - 2026-04-14
 
 ### Changed
 
@@ -60,7 +60,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.18 - 2026-04-14
+## [0.3.18] - 2026-04-14
 
 ### Fixed
 
@@ -68,7 +68,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.17 - 2026-04-13
+## [0.3.17] - 2026-04-13
 
 ### Fixed
 
@@ -76,7 +76,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.16 - 2026-04-13
+## [0.3.16] - 2026-04-13
 
 ### Fixed
 
@@ -84,7 +84,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.15 - 2026-04-13
+## [0.3.15] - 2026-04-13
 
 ### Fixed
 
@@ -92,7 +92,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.14 - 2026-04-13
+## [0.3.14] - 2026-04-13
 
 ### Fixed
 
@@ -100,7 +100,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.13 - 2026-04-13
+## [0.3.13] - 2026-04-13
 
 ### Changed
 
@@ -108,7 +108,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.12 - 2026-04-13
+## [0.3.12] - 2026-04-13
 
 ### Changed
 
@@ -116,7 +116,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.11 - 2026-04-13
+## [0.3.11] - 2026-04-13
 
 ### Changed
 
@@ -124,7 +124,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.10 - 2026-04-13
+## [0.3.10] - 2026-04-13
 
 ### Changed
 
@@ -132,7 +132,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.9 - 2026-04-13
+## [0.3.9] - 2026-04-13
 
 ### Changed
 
@@ -140,7 +140,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.8 - 2026-04-13
+## [0.3.8] - 2026-04-13
 
 ### Changed
 
@@ -148,7 +148,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.7 - 2026-04-13
+## [0.3.7] - 2026-04-13
 
 ### Changed
 
@@ -156,7 +156,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.6 - 2026-04-13
+## [0.3.6] - 2026-04-13
 
 ### Changed
 
@@ -164,7 +164,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.5 - 2026-04-13
+## [0.3.5] - 2026-04-13
 
 ### Changed
 
@@ -172,7 +172,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.4 - 2026-04-13
+## [0.3.4] - 2026-04-13
 
 ### Changed
 
@@ -180,7 +180,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.3 - 2026-04-12
+## [0.3.3] - 2026-04-12
 
 ### Fixed
 
@@ -188,7 +188,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.2 - 2026-04-12
+## [0.3.2] - 2026-04-12
 
 ### Fixed
 
@@ -196,7 +196,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.1 - 2026-04-12
+## [0.3.1] - 2026-04-12
 
 ### Fixed
 
@@ -204,7 +204,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.3.0 - 2026-04-12
+## [0.3.0] - 2026-04-12
 
 ### Added
 
@@ -212,7 +212,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.2.3 - 2026-04-12
+## [0.2.3] - 2026-04-12
 
 ### Removed
 
@@ -220,7 +220,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.2.2 - 2026-04-12
+## [0.2.2] - 2026-04-12
 
 ### Added
 
@@ -228,7 +228,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.2.1 - 2026-04-12
+## [0.2.1] - 2026-04-12
 
 ### Fixed
 
@@ -236,7 +236,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.2.0 - 2026-04-11
+## [0.2.0] - 2026-04-11
 
 ### Added
 
@@ -253,7 +253,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.1.9 - 2026-04-07
+## [0.1.9] - 2026-04-07
 
 ### Changed
 
@@ -266,7 +266,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.1.8 - 2026-04-07
+## [0.1.8] - 2026-04-07
 
 ### Fixed
 
@@ -280,7 +280,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.1.7 - 2026-04-07
+## [0.1.7] - 2026-04-07
 
 ### Added
 
@@ -301,7 +301,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.1.5 - 2026-04-06
+## [0.1.5] - 2026-04-06
 
 ### Added
 
@@ -324,7 +324,7 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.1.4 - 2026-04-06
+## [0.1.4] - 2026-04-06
 
 ### Removed
 
@@ -341,8 +341,45 @@ _Last updated: 2026-04-15 (UTC)._
 
 ---
 
-## 0.1.3 - 2026-04-06
+## [0.1.3] - 2026-04-06
 
 - Published refreshed Docker Hub images for `fugginold/dockwatch`.
 - Added multi-architecture image tags for `amd64`, `386`, `arm/v6`, and `arm64`.
 - Updated the shared `0.1.3` and `latest` tags to point at the current manifest set.
+
+<!-- Footer links -->
+[Unreleased]: https://github.com/FugginOld/dockwatch/compare/v0.3.23...HEAD
+[0.3.23]: https://github.com/FugginOld/dockwatch/compare/v0.3.22...v0.3.23
+[0.3.22]: https://github.com/FugginOld/dockwatch/compare/v0.3.21...v0.3.22
+[0.3.21]: https://github.com/FugginOld/dockwatch/compare/v0.3.20...v0.3.21
+[0.3.20]: https://github.com/FugginOld/dockwatch/compare/v0.3.19...v0.3.20
+[0.3.19]: https://github.com/FugginOld/dockwatch/compare/v0.3.18...v0.3.19
+[0.3.18]: https://github.com/FugginOld/dockwatch/compare/v0.3.17...v0.3.18
+[0.3.17]: https://github.com/FugginOld/dockwatch/compare/v0.3.16...v0.3.17
+[0.3.16]: https://github.com/FugginOld/dockwatch/compare/v0.3.15...v0.3.16
+[0.3.15]: https://github.com/FugginOld/dockwatch/compare/v0.3.14...v0.3.15
+[0.3.14]: https://github.com/FugginOld/dockwatch/compare/v0.3.13...v0.3.14
+[0.3.13]: https://github.com/FugginOld/dockwatch/compare/v0.3.12...v0.3.13
+[0.3.12]: https://github.com/FugginOld/dockwatch/compare/v0.3.11...v0.3.12
+[0.3.11]: https://github.com/FugginOld/dockwatch/compare/v0.3.10...v0.3.11
+[0.3.10]: https://github.com/FugginOld/dockwatch/compare/v0.3.9...v0.3.10
+[0.3.9]: https://github.com/FugginOld/dockwatch/compare/v0.3.8...v0.3.9
+[0.3.8]: https://github.com/FugginOld/dockwatch/compare/v0.3.7...v0.3.8
+[0.3.7]: https://github.com/FugginOld/dockwatch/compare/v0.3.6...v0.3.7
+[0.3.6]: https://github.com/FugginOld/dockwatch/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/FugginOld/dockwatch/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/FugginOld/dockwatch/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/FugginOld/dockwatch/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/FugginOld/dockwatch/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/FugginOld/dockwatch/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/FugginOld/dockwatch/compare/v0.2.3...v0.3.0
+[0.2.3]: https://github.com/FugginOld/dockwatch/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/FugginOld/dockwatch/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/FugginOld/dockwatch/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/FugginOld/dockwatch/compare/v0.1.9...v0.2.0
+[0.1.9]: https://github.com/FugginOld/dockwatch/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/FugginOld/dockwatch/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/FugginOld/dockwatch/compare/v0.1.5...v0.1.7
+[0.1.5]: https://github.com/FugginOld/dockwatch/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/FugginOld/dockwatch/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/FugginOld/dockwatch/releases/tag/v0.1.3

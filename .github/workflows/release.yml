@@ -3,16 +3,34 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "v*.*.*"
+      - "v*.*.*-*"
 
 jobs:
-  docker:
-    name: docker
+  test:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+
+      - run: go mod download
+      - run: go build ./...
+      - run: go test ./...
+
+  create-release:
+    needs: test
     runs-on: ubuntu-latest
 
     permissions:
       contents: write
-      packages: write
 
     steps:
       - name: Checkout
@@ -20,62 +38,52 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.BOT_USERNAME }}
-          password: ${{ secrets.BOT_GHCR_PAT }}
-          registry: ghcr.io
+      - name: Extract changelog entry
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk '/^## \['"$VERSION"'\]/{found=1; next} found && /^## \[/{exit} found{print}' CHANGELOG.md \
+            | sed '/^---$/d' \
+            | sed '/^[[:space:]]*$/d')
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${GITHUB_REF_NAME}"
+          fi
+          echo "$NOTES" > /tmp/release-notes.md
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.25.x
+          go-version: "1.25.x"
 
-      # Build binary and stage it where dockers_v2 expects it
-      - name: Build app
-        run: |
-          CGO_ENABLED=0 go build -ldflags "-X github.com/fugginold/dockwatch/internal/meta.Version=${GITHUB_REF_NAME}" -o dockwatch
-          mkdir -p linux/amd64
-          cp dockwatch linux/amd64/dockwatch
-
-      # Build local image
-      - name: Build Docker image (test)
-        run: docker build --build-arg TARGETPLATFORM=linux/amd64 -t dockwatch:test .
-
-      # Health test container
-      - name: Test container
-        run: |
-          chmod +x scripts/test-container.sh
-          scripts/test-container.sh dockwatch:test
-
-      # Restore permissions changed by chmod so GoReleaser sees a clean tree
-      - name: Restore modified files
-        run: git restore scripts/test-container.sh 2>/dev/null || true
-
-      # Only release if container is healthy
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --clean
+          args: release --clean --release-notes /tmp/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Update rollback pointer
       - name: Update stable tag
+        if: steps.prerelease.outputs.is_prerelease == 'false'
         run: |
           git tag -f stable
           git push origin stable --force
+
+  export-images:
+    needs: create-release
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/docker-export.yml
+    with:
+      version: ${{ github.ref_name }}
+      upload_to_release: true
+    secrets: inherit

@@ -1,0 +1,142 @@
+name: Docker Export
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Image version/tag (e.g. v1.2.3)"
+        type: string
+        required: true
+      upload_to_release:
+        description: "Upload image digest manifest to GitHub Release"
+        type: boolean
+        default: false
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+      BOT_USERNAME:
+        required: true
+      BOT_GHCR_PAT:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image version/tag (e.g. v1.2.3)"
+        type: string
+        required: true
+      upload_to_release:
+        description: "Upload image digest manifest to GitHub Release"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - variant: debian
+            dockerfile: dockerfiles/Dockerfile.debian
+            base_image: debian:bookworm-slim
+            default: "true"
+          - variant: ubuntu
+            dockerfile: dockerfiles/Dockerfile.ubuntu
+            base_image: ubuntu:24.04
+            default: "false"
+          - variant: alpine
+            dockerfile: dockerfiles/Dockerfile.alpine
+            base_image: alpine:3.21
+            default: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.BOT_USERNAME }}
+          password: ${{ secrets.BOT_GHCR_PAT }}
+          registry: ghcr.io
+
+      - name: Compute DockerHub tags
+        id: tags
+        run: |
+          VERSION="${{ inputs.version }}"
+          VARIANT="${{ matrix.variant }}"
+          IS_DEFAULT="${{ matrix.default }}"
+          REPO="fugginold/dockwatch"
+          GHCR_REPO="ghcr.io/fugginold/dockwatch"
+
+          # Strip leading 'v' for clean numeric tag
+          CLEAN_VERSION="${VERSION#v}"
+
+          # Determine if this is a stable release (vX.Y.Z with no suffix)
+          IS_STABLE=false
+          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IS_STABLE=true
+          fi
+
+          # Variant-specific tag (always pushed)
+          TAGS="${REPO}:${CLEAN_VERSION}-${VARIANT},${GHCR_REPO}:${CLEAN_VERSION}-${VARIANT}"
+
+          if [ "$IS_DEFAULT" = "true" ]; then
+            # Default variant also gets the plain version tag
+            TAGS="${REPO}:${CLEAN_VERSION},${GHCR_REPO}:${CLEAN_VERSION},${TAGS}"
+            if [ "$IS_STABLE" = "true" ]; then
+              TAGS="${REPO}:latest,${GHCR_REPO}:latest,${REPO}:stable,${GHCR_REPO}:stable,${TAGS}"
+            fi
+          elif [ "$IS_STABLE" = "true" ]; then
+            TAGS="${TAGS},${REPO}:latest-${VARIANT},${GHCR_REPO}:latest-${VARIANT}"
+          fi
+
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            VERSION=${{ inputs.version }}
+            BASE_IMAGE=${{ matrix.base_image }}
+
+      - name: Write image digest manifest
+        if: inputs.upload_to_release
+        run: |
+          cat > digest-${{ matrix.variant }}.txt << EOF
+          variant: ${{ matrix.variant }}
+          version: ${{ inputs.version }}
+          digest: ${{ steps.build.outputs.digest }}
+          tags: ${{ steps.tags.outputs.tags }}
+          EOF
+
+      - name: Upload digest to release
+        if: inputs.upload_to_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          files: digest-${{ matrix.variant }}.txt
