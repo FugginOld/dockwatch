@@ -1,17 +1,16 @@
 # Changelog
 
 <!-- BEGIN UNRELEASED -->
-## [Unreleased]
+## Unreleased
 
-_Last updated: 2026-04-15 (UTC)._
+_Last updated: 2026-04-27 (UTC). Changes since v0.4.8._
 
 ### Changed
 
-- Changelog automation enabled for `main`.
+- chore(deps): bump actions/setup-go from 4 to 6
 
 ---
 <!-- END UNRELEASED -->
-
 ## [0.3.23] - 2026-04-14
 
 ### Fixed
