@@ -139,7 +139,7 @@ jobs:
 
       - name: Upload digest to release
         if: inputs.upload_to_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.version }}
           files: digest-${{ matrix.variant }}.txt
