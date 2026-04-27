@@ -41,7 +41,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25.x
       - uses: dominikh/staticcheck-action@9716614d4101e79b4340dd97b10e54d68234e431 #v1.4.1
@@ -59,7 +59,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25.x
       - name: Verify go.mod and go.sum are tidy
@@ -88,7 +88,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25.x
       - name: Run race tests
@@ -104,7 +104,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25.x
       - name: Install govulncheck
@@ -165,7 +165,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
       - name: Run tests
@@ -184,7 +184,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25.x
       - name: Set up QEMU
