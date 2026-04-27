@@ -87,21 +87,18 @@ jobs:
           REPO="fugginold/dockwatch"
           GHCR_REPO="ghcr.io/fugginold/dockwatch"
 
-          # Strip leading 'v' for clean numeric tag
-          CLEAN_VERSION="${VERSION#v}"
-
           # Determine if this is a stable release (vX.Y.Z with no suffix)
           IS_STABLE=false
           if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             IS_STABLE=true
           fi
 
-          # Variant-specific tag (always pushed)
-          TAGS="${REPO}:${CLEAN_VERSION}-${VARIANT},${GHCR_REPO}:${CLEAN_VERSION}-${VARIANT}"
+          # Variant-specific tag (always pushed) — keep the 'v' prefix to match release tag convention
+          TAGS="${REPO}:${VERSION}-${VARIANT},${GHCR_REPO}:${VERSION}-${VARIANT}"
 
           if [ "$IS_DEFAULT" = "true" ]; then
             # Default variant also gets the plain version tag
-            TAGS="${REPO}:${CLEAN_VERSION},${GHCR_REPO}:${CLEAN_VERSION},${TAGS}"
+            TAGS="${REPO}:${VERSION},${GHCR_REPO}:${VERSION},${TAGS}"
             if [ "$IS_STABLE" = "true" ]; then
               TAGS="${REPO}:latest,${GHCR_REPO}:latest,${REPO}:stable,${GHCR_REPO}:stable,${TAGS}"
             fi
@@ -110,6 +107,12 @@ jobs:
           fi
 
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Compute version without v prefix
+        id: ver
+        run: echo "clean=${VERSION#v}" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION: ${{ inputs.version }}
 
       - name: Build and push Docker image
         id: build
@@ -121,7 +124,7 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           build-args: |
-            VERSION=${{ inputs.version }}
+            VERSION=${{ steps.ver.outputs.clean }}
             BASE_IMAGE=${{ matrix.base_image }}
 
       - name: Write image digest manifest
