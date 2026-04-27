@@ -1,8 +1,10 @@
 ARG BASE_IMAGE=alpine:3.21
 
-FROM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
 ARG VERSION=dev
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
 WORKDIR /app
 
@@ -11,7 +13,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags "-s -w -X github.com/fugginold/dockwatch/internal/meta.Version=${VERSION}" \
     -o dockwatch .
 
@@ -19,10 +21,8 @@ FROM ${BASE_IMAGE}
 
 RUN apk --no-cache add ca-certificates tzdata
 
-WORKDIR /root/
+COPY --from=builder /app/dockwatch /dockwatch
 
-COPY --from=builder /app/dockwatch .
+HEALTHCHECK CMD ["/dockwatch", "--health-check"]
 
-HEALTHCHECK CMD [ "./dockwatch", "--health-check"]
-
-ENTRYPOINT ["./dockwatch"]
+ENTRYPOINT ["/dockwatch"]
