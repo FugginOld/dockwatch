@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Fetch Dependabot metadata
         id: dependabot-metadata
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
 
       # GITHUB_TOKEN can approve Dependabot PRs via pull_request_target because
       # dependabot[bot] creates the PR (not a GitHub Actions workflow), so the
