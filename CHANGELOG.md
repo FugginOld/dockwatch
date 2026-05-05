@@ -3,15 +3,14 @@
 <!-- BEGIN UNRELEASED -->
 ## [Unreleased]
 
-_Last updated: 2026-04-15 (UTC)._
+_Last updated: 2026-05-05 (UTC). Changes since v0.3.23._
 
 ### Changed
 
-- Changelog automation enabled for `main`.
+- chore(deps): bump actions/first-interaction from 1 to 3 (#83)
 
 ---
 <!-- END UNRELEASED -->
-
 ## [0.3.23] - 2026-04-14
 
 ### Fixed
