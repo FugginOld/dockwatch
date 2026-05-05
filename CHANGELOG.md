@@ -1,9 +1,9 @@
 # Changelog
 
 <!-- BEGIN UNRELEASED -->
-## Unreleased
+## [Unreleased]
 
-_Last updated: 2026-05-05 (UTC). Changes since v0.4.12._
+_Last updated: 2026-05-05 (UTC). Changes since v0.3.23._
 
 ### Changed
 
