@@ -4,12 +4,12 @@ go 1.25.0
 
 require (
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.5.3+incompatible
+	github.com/docker/cli v29.6.1+incompatible
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.7.0
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.42.0
+	github.com/onsi/gomega v1.42.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.4
@@ -69,9 +69,9 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
