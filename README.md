@@ -48,47 +48,28 @@ docker ps --filter name=dockwatch
 docker logs --tail=100 dockwatch
 ```
 
-## Usage
-
-Run one immediate check and exit:
+## Common commands
 
 ```bash
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  dockwatch:latest --force-update
+# One immediate check, then exit
+dockwatch --run-once
+
+# Check on a schedule (cron) or a fixed interval (seconds)
+dockwatch --schedule "@every 6h"
+dockwatch --interval 300
+
+# Detect updates without applying them
+dockwatch --monitor-only
 ```
 
-Interactive shell (`dockwatch>` prompt) — detach without stopping via `Ctrl-p` then `Ctrl-q`:
+Run `dockwatch --help` for the full flag list.
 
-```bash
-docker run --rm -it \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  dockwatch:latest
-```
+## Documentation
 
-HTTP API plus periodic scheduler:
-
-```bash
-DW_TOKEN='replace-with-strong-token'
-
-docker run -d \
-  --name dockwatch \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -e DOCKWATCH_HTTP_API_TOKEN="${DW_TOKEN}" \
-  dockwatch:latest \
-  --http-api-update \
-  --http-api-periodic-polls \
-  --schedule '@every 24h'
-```
-
-```bash
-curl -X POST -H "Authorization: Bearer ${DW_TOKEN}" http://localhost:8080/v1/update
-curl         -H "Authorization: Bearer ${DW_TOKEN}" http://localhost:8080/v1/schedule
-```
-
-See all options with `dockwatch --help`.
+- **[docs/HOWTO.md](docs/HOWTO.md)** — running, container selection, the HTTP
+  API, metrics, and the full flag / environment-variable reference.
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — module layout, the update
+  flow, and where to add new behavior.
 
 ## Build from source
 
