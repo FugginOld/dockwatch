@@ -1,20 +1,5 @@
 package util
 
-// SliceEqual compares two slices and checks whether they have equal content
-func SliceEqual(s1, s2 []string) bool {
-	if len(s1) != len(s2) {
-		return false
-	}
-
-	for i := range s1 {
-		if s1[i] != s2[i] {
-			return false
-		}
-	}
-
-	return true
-}
-
 // SliceSubtract subtracts the content of slice a2 from slice a1
 func SliceSubtract(a1, a2 []string) []string {
 	a := []string{}

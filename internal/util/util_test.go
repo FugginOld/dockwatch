@@ -7,33 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSliceEqual_True(t *testing.T) {
-	s1 := []string{"a", "b", "c"}
-	s2 := []string{"a", "b", "c"}
-
-	result := SliceEqual(s1, s2)
-
-	assert.True(t, result)
-}
-
-func TestSliceEqual_DifferentLengths(t *testing.T) {
-	s1 := []string{"a", "b", "c"}
-	s2 := []string{"a", "b", "c", "d"}
-
-	result := SliceEqual(s1, s2)
-
-	assert.False(t, result)
-}
-
-func TestSliceEqual_DifferentContents(t *testing.T) {
-	s1 := []string{"a", "b", "c"}
-	s2 := []string{"a", "b", "d"}
-
-	result := SliceEqual(s1, s2)
-
-	assert.False(t, result)
-}
-
 func TestSliceSubtract(t *testing.T) {
 	a1 := []string{"a", "b", "c"}
 	a2 := []string{"a", "c"}
