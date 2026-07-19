@@ -7,55 +7,39 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// New is a factory function creating a new Handler instance
-func New(updateFn func(images []string), updateLock chan bool) *Handler {
-	lock := updateLock
-	if lock == nil {
-		lock = make(chan bool, 1)
-		lock <- true
-	}
+// Scanner runs guarded container update scans. wait blocks for the
+// single-flight guard; when false the run is skipped if one is already
+// in progress. The guard itself lives in the Scanner, not this handler.
+type Scanner interface {
+	Scan(images []string, wait bool)
+}
 
+// New is a factory function creating a new Handler instance.
+func New(scanner Scanner) *Handler {
 	return &Handler{
-		fn:   updateFn,
-		lock: lock,
-		Path: "/v1/update",
+		scanner: scanner,
+		Path:    "/v1/update",
 	}
 }
 
-// Handler is an API handler used for triggering container update scans
+// Handler is an API handler used for triggering container update scans.
 type Handler struct {
-	fn   func(images []string)
-	lock chan bool
-	Path string
+	scanner Scanner
+	Path    string
 }
 
-// Handle is the actual http.Handle function doing all the heavy lifting
-func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
+// Handle parses the requested images and delegates the guarded scan to the
+// Scanner. A targeted image update waits for the guard; a full scan is
+// skipped when one is already running.
+func (handle *Handler) Handle(_ http.ResponseWriter, r *http.Request) {
 	log.Info("Updates triggered by HTTP API request.")
 
 	var images []string
-	imageQueries, found := r.URL.Query()["image"]
-	if found {
+	if imageQueries, found := r.URL.Query()["image"]; found {
 		for _, image := range imageQueries {
 			images = append(images, strings.Split(image, ",")...)
 		}
-
-	} else {
-		images = nil
 	}
 
-	if len(images) > 0 {
-		chanValue := <-handle.lock
-		defer func() { handle.lock <- chanValue }()
-		handle.fn(images)
-	} else {
-		select {
-		case chanValue := <-handle.lock:
-			defer func() { handle.lock <- chanValue }()
-			handle.fn(images)
-		default:
-			log.Debug("Skipped. Another update already running.")
-		}
-	}
-
+	handle.scanner.Scan(images, len(images) > 0)
 }
