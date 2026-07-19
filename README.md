@@ -21,7 +21,39 @@ configuration.
 
 ## Quick start
 
-Build and run with Docker Compose:
+Run the published image with Docker Compose:
+
+```yaml
+# docker-compose.yml
+services:
+  dockwatch:
+    image: ghcr.io/fugginold/dockwatch:latest
+    container_name: dockwatch
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: --interval 300
+```
+
+```bash
+docker compose up -d
+```
+
+Or run it directly:
+
+```bash
+docker run -d \
+  --name dockwatch \
+  --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  ghcr.io/fugginold/dockwatch:latest --interval 300
+```
+
+Because it runs a published image, dockwatch also keeps **itself** up to date on each run.
+
+### Build the image from source
+
+To hack on dockwatch, build the image locally instead:
 
 ```bash
 git clone https://github.com/fugginold/dockwatch.git
@@ -29,17 +61,9 @@ cd dockwatch
 docker compose up -d --build
 ```
 
-Or build the image and run it directly:
-
-```bash
-docker build -t dockwatch:latest .
-
-docker run -d \
-  --name dockwatch \
-  --restart unless-stopped \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  dockwatch:latest --interval 300
-```
+A locally-built image has no registry upstream, so dockwatch cannot self-update
+it — you'll see harmless "pull access denied" warnings for its own container.
+Rebuild with `docker compose up -d --build` to update.
 
 Check it:
 
