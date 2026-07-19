@@ -43,9 +43,12 @@ type Client interface {
 // The client reads its configuration from the following environment variables:
 //   - DOCKER_HOST			the docker-engine host to send api requests to
 //   - DOCKER_TLS_VERIFY		whether to verify tls certificates
-//   - DOCKER_API_VERSION	the minimum docker api version to work with
+//   - DOCKER_API_VERSION	pin a specific docker api version (optional)
+//
+// When DOCKER_API_VERSION is unset the client negotiates the highest API
+// version the daemon supports, instead of pinning an old default.
 func NewClient(opts ClientOptions) (Client, error) {
-	cli, err := sdkClient.NewClientWithOpts(sdkClient.FromEnv)
+	cli, err := sdkClient.NewClientWithOpts(sdkClient.FromEnv, sdkClient.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
 	}

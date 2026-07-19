@@ -26,7 +26,7 @@ func RegisterDockerFlags(rootCmd *cobra.Command) {
 	flags := rootCmd.PersistentFlags()
 	flags.StringP("host", "H", envStringOr("DOCKER_HOST", "unix:///var/run/docker.sock"), "daemon socket to connect to")
 	flags.BoolP("tlsverify", "v", envBool("DOCKER_TLS_VERIFY"), "use TLS and verify the remote")
-	flags.StringP("api-version", "a", envStringOr("DOCKER_API_VERSION", DockerAPIMinVersion), "api version to use by docker client")
+	flags.StringP("api-version", "a", envString("DOCKER_API_VERSION"), "docker api version to use; empty negotiates the highest the daemon supports")
 	flags.BoolP(
 		"registry-tls-skip-verify",
 		"",
