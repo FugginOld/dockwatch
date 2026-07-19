@@ -1,20 +1,32 @@
+#
+# Builder
+#
+FROM golang:1.26-alpine AS builder
+
+ARG VERSION=dev
+
+WORKDIR /src
+
+RUN apk add --no-cache ca-certificates tzdata
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags "-s -w -X github.com/fugginold/dockwatch/internal/meta.Version=${VERSION}" \
+    -o /dockwatch .
+
+#
+# Runtime
+#
 FROM alpine:latest
 
-ARG TARGETPLATFORM
+RUN apk add --no-cache ca-certificates tzdata
 
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates
+COPY --from=builder /dockwatch /dockwatch
 
-WORKDIR /root/
-
-# Copy prebuilt binary from GoReleaser (organized by platform by dockers_v2)
-COPY ${TARGETPLATFORM}/dockwatch .
-
-# Ensure executable
-RUN chmod +x dockwatch
-
-# Safe health check (won't fail build if pgrep missing)
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
-  CMD pgrep dockwatch || exit 0
+  CMD ["/dockwatch", "--health-check"]
 
-ENTRYPOINT ["./dockwatch"]
+ENTRYPOINT ["/dockwatch"]

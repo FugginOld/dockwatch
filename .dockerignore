@@ -1,0 +1,8 @@
+.git
+.github
+.claude
+.vscode
+*.md
+docker-compose.yml
+Dockerfile
+logo.png
