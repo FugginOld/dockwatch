@@ -27,4 +27,6 @@ jobs:
           delete-untagged: true
           delete-partial-images: true
           dry-run: ${{ inputs.dry-run }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # User-owned package: GITHUB_TOKEN cannot delete it (deletes 404).
+          # Use a classic PAT with delete:packages, stored as the GHCR_PAT secret.
+          token: ${{ secrets.GHCR_PAT }}
