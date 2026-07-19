@@ -1,10 +1,10 @@
 # Temporary allowlist for upstream vulnerabilities with no fixed version yet.
 # Keep this list minimal and remove entries as soon as fixes are published.
+# All entries are github.com/docker/docker CVEs with no released fix; we are
+# pinned at the latest published v28.5.2. Revisit when Engine 29.x reaches the Go proxy.
 
-GO-2026-4866
-GO-2026-4870
 GO-2026-4883
 GO-2026-4887
-GO-2026-4945
-GO-2026-4946
-GO-2026-4947
+GO-2026-5617
+GO-2026-5668
+GO-2026-5746
