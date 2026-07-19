@@ -94,6 +94,28 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Only let this tag own :latest if it is the highest released version, so a
+      # backport or an accidental low tag can never downgrade :latest.
+      - name: Decide whether this version owns :latest
+        id: guard
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY,,}"
+          cur="${GITHUB_REF_NAME#v}"
+          if ! printf '%s' "$cur" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "is_highest=false" >> "$GITHUB_OUTPUT"
+            echo "non-release tag ($cur): not touching :latest"; exit 0
+          fi
+          token=$(curl -sf "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r .token)
+          # ponytail: single tags/list page (n=1000); paginate if tag count ever exceeds that.
+          existing=$(curl -sf -H "Authorization: Bearer $token" \
+            "https://ghcr.io/v2/${repo}/tags/list?n=1000" \
+            | jq -r '.tags[]?' | sed -n 's/^v\?\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p')
+          highest=$(printf '%s\n%s\n' "$existing" "$cur" | sort -V | tail -1)
+          echo "current=$cur highest=$highest"
+          [ "$highest" = "$cur" ] \
+            && echo "is_highest=true" >> "$GITHUB_OUTPUT" \
+            || echo "is_highest=false" >> "$GITHUB_OUTPUT"
       - uses: docker/metadata-action@v5
         id: meta
         with:
@@ -101,7 +123,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ steps.guard.outputs.is_highest }}
       - uses: docker/build-push-action@v6
         with:
           context: .
