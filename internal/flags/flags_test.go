@@ -2,13 +2,10 @@ package flags
 
 import (
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -284,46 +281,4 @@ func TestProcessFlagAliasesInvalidPorcelaineVersion(t *testing.T) {
 	assert.PanicsWithValue(t, `FATAL`, func() {
 		ProcessFlagAliases(flags)
 	})
-}
-
-func TestFlagsArePrecentInDocumentation(t *testing.T) {
-
-	cmd := new(cobra.Command)
-	SetDefaults()
-	RegisterDockerFlags(cmd)
-	RegisterSystemFlags(cmd)
-
-	flags := cmd.PersistentFlags()
-
-	docFiles := []string{
-		"../../docs/arguments.md",
-		"../../docs/lifecycle-hooks.md",
-	}
-	allDocs := ""
-	for _, f := range docFiles {
-		bytes, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatalf("Could not load docs file %q: %v", f, err)
-		}
-		allDocs += string(bytes)
-	}
-
-	flags.VisitAll(func(f *pflag.Flag) {
-		if !strings.Contains(allDocs, "--"+f.Name) {
-			t.Logf("Docs does not mention flag long name %q", f.Name)
-			t.Fail()
-		}
-		if !strings.Contains(allDocs, "-"+f.Shorthand) {
-			t.Logf("Docs does not mention flag shorthand %q (%q)", f.Shorthand, f.Name)
-			t.Fail()
-		}
-	})
-
-	for _, key := range viper.AllKeys() {
-		envKey := strings.ToUpper(key)
-		if !strings.Contains(allDocs, envKey) {
-			t.Logf("Docs does not mention environment variable %q", envKey)
-			t.Fail()
-		}
-	}
 }

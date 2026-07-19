@@ -4,21 +4,73 @@ on:
   pull_request:
     branches: [dev, main]
   push:
-    branches: [dev]
+    branches: [dev, main]
+  workflow_dispatch: {}
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-go@v6
         with:
           go-version: 1.26.x
           cache: true
-
       - run: go mod download
       - run: go build ./...
       - run: go test ./...
       - run: go vet ./...
+
+  vuln:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.x
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - name: Run govulncheck with allowlist policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          ALLOWLIST_FILE=.github/security/govuln-allowlist.txt
+
+          if [[ ! -f "$ALLOWLIST_FILE" ]]; then
+            echo "::error::Missing vulnerability allowlist: $ALLOWLIST_FILE"
+            exit 1
+          fi
+
+          SCAN_EXIT=0
+          govulncheck ./... > govulncheck.out 2>&1 || SCAN_EXIT=$?
+          cat govulncheck.out
+
+          FOUND_IDS=$(grep -oE 'GO-[0-9]{4}-[0-9]+' govulncheck.out | tr -d '\r' | sort -u || true)
+          if [[ -z "$FOUND_IDS" ]]; then
+            if [[ "$SCAN_EXIT" -ne 0 ]]; then
+              echo "::error::govulncheck failed without producing vulnerability IDs"
+              exit "$SCAN_EXIT"
+            fi
+            echo "No vulnerabilities found by govulncheck"
+            exit 0
+          fi
+
+          ALLOWLIST_IDS=$(grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$ALLOWLIST_FILE" | tr -d '\r' | sort -u)
+          UNEXPECTED_IDS=$(comm -23 <(printf '%s\n' "$FOUND_IDS") <(printf '%s\n' "$ALLOWLIST_IDS") || true)
+
+          if [[ -n "$UNEXPECTED_IDS" ]]; then
+            echo "::error::Unexpected vulnerabilities found (not allowlisted):"
+            echo "$UNEXPECTED_IDS"
+            exit 1
+          fi
+
+          echo "::warning::Only allowlisted vulnerabilities were found:"
+          echo "$FOUND_IDS"
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t dockwatch:ci .
