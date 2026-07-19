@@ -1,13 +1,13 @@
 # Changelog
 
 <!-- BEGIN UNRELEASED -->
-## [Unreleased]
+## Unreleased
 
-_Last updated: 2026-05-05 (UTC). Changes since v0.3.23._
+_Last updated: 2026-07-19 (UTC). Changes since v0.4.17._
 
 ### Changed
 
-- chore(deps): bump actions/first-interaction from 1 to 3 (#83)
+- chore(deps): bump codecov/codecov-action from 6 to 7 (#89)
 
 ---
 <!-- END UNRELEASED -->
