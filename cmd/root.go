@@ -31,7 +31,6 @@ func NewRootCommand() *cobra.Command {
 }
 
 func init() {
-	flags.SetDefaults()
 	flags.RegisterDockerFlags(rootCmd)
 	flags.RegisterSystemFlags(rootCmd)
 }

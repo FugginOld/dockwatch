@@ -4,6 +4,7 @@ package container
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -297,16 +298,16 @@ func (c Container) GetCreateConfig() *dockercontainer.Config {
 		config.Hostname = ""
 	}
 
-	if util.SliceEqual(config.Entrypoint, imageConfig.Entrypoint) {
+	if slices.Equal(config.Entrypoint, imageConfig.Entrypoint) {
 		config.Entrypoint = nil
-		if util.SliceEqual(config.Cmd, imageConfig.Cmd) {
+		if slices.Equal(config.Cmd, imageConfig.Cmd) {
 			config.Cmd = nil
 		}
 	}
 
 	// Clear HEALTHCHECK configuration (if default)
 	if config.Healthcheck != nil && imageConfig.Healthcheck != nil {
-		if util.SliceEqual(config.Healthcheck.Test, imageConfig.Healthcheck.Test) {
+		if slices.Equal(config.Healthcheck.Test, imageConfig.Healthcheck.Test) {
 			config.Healthcheck.Test = nil
 		}
 

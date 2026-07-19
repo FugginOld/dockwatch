@@ -16,7 +16,6 @@ func TestEnvConfig_Defaults(t *testing.T) {
 	_ = os.Unsetenv("DOCKER_HOST")
 
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 
 	err := EnvConfig(cmd)
@@ -30,7 +29,6 @@ func TestEnvConfig_Defaults(t *testing.T) {
 
 func TestEnvConfig_Custom(t *testing.T) {
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 
 	err := cmd.ParseFlags([]string{"--host", "some-custom-docker-host", "--tlsverify", "--api-version", "1.99"})
@@ -71,7 +69,6 @@ func TestGetSecretsFromFilesWithFile(t *testing.T) {
 
 func testGetSecretsFromFiles(t *testing.T, flagName string, expected string, args ...string) {
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterSystemFlags(cmd)
 	require.NoError(t, cmd.ParseFlags(args))
 	GetSecretsFromFiles(cmd)
@@ -84,7 +81,6 @@ func testGetSecretsFromFiles(t *testing.T, flagName string, expected string, arg
 
 func TestHTTPAPIPeriodicPollsFlag(t *testing.T) {
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -105,7 +101,6 @@ func TestIsFile(t *testing.T) {
 func TestProcessFlagAliases(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(_ int) { t.FailNow() }
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -128,7 +123,6 @@ func TestProcessFlagAliasesLogLevelFromEnvironment(t *testing.T) {
 	cmd := new(cobra.Command)
 	t.Setenv("DOCKWATCH_DEBUG", `true`)
 
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -143,7 +137,6 @@ func TestProcessFlagAliasesLogLevelFromEnvironment(t *testing.T) {
 func TestLogFormatFlag(t *testing.T) {
 	cmd := new(cobra.Command)
 
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -182,7 +175,6 @@ func TestLogFormatFlag(t *testing.T) {
 func TestLogLevelFlag(t *testing.T) {
 	cmd := new(cobra.Command)
 
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -194,7 +186,6 @@ func TestLogLevelFlag(t *testing.T) {
 func TestProcessFlagAliasesSchedAndInterval(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(_ int) { panic(`FATAL`) }
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -209,7 +200,6 @@ func TestProcessFlagAliasesSchedAndInterval(t *testing.T) {
 func TestProcessFlagAliasesCronAlias(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(_ int) { t.FailNow() }
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -224,7 +214,6 @@ func TestProcessFlagAliasesCronAlias(t *testing.T) {
 func TestProcessFlagAliasesCronAndScheduleConflict(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(_ int) { panic(`FATAL`) }
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -239,7 +228,6 @@ func TestProcessFlagAliasesCronAndScheduleConflict(t *testing.T) {
 func TestProcessFlagAliasesForceUpdateAlias(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(_ int) { t.FailNow() }
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -256,7 +244,6 @@ func TestProcessFlagAliasesScheduleFromEnvironment(t *testing.T) {
 
 	t.Setenv("DOCKWATCH_SCHEDULE", `@hourly`)
 
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 
@@ -271,7 +258,6 @@ func TestProcessFlagAliasesScheduleFromEnvironment(t *testing.T) {
 func TestProcessFlagAliasesInvalidPorcelaineVersion(t *testing.T) {
 	logrus.StandardLogger().ExitFunc = func(_ int) { panic(`FATAL`) }
 	cmd := new(cobra.Command)
-	SetDefaults()
 	RegisterDockerFlags(cmd)
 	RegisterSystemFlags(cmd)
 

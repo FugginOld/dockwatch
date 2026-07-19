@@ -3,7 +3,7 @@ package container
 import "strconv"
 
 const (
-	dockwatchLabel        = "com.centurylinklabs.dockwatch"
+	dockwatchLabel         = "com.centurylinklabs.dockwatch"
 	signalLabel            = "com.centurylinklabs.dockwatch.stop-signal"
 	enableLabel            = "com.centurylinklabs.dockwatch.enable"
 	monitorOnlyLabel       = "com.centurylinklabs.dockwatch.monitor-only"

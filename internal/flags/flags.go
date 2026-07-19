@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 // DockerAPIMinVersion is the minimum version of the docker api required to
@@ -24,9 +24,9 @@ var defaultInterval = int((time.Hour * 24).Seconds())
 // RegisterDockerFlags that are used directly by the docker api client
 func RegisterDockerFlags(rootCmd *cobra.Command) {
 	flags := rootCmd.PersistentFlags()
-	flags.StringP("host", "H", envString("DOCKER_HOST"), "daemon socket to connect to")
+	flags.StringP("host", "H", envStringOr("DOCKER_HOST", "unix:///var/run/docker.sock"), "daemon socket to connect to")
 	flags.BoolP("tlsverify", "v", envBool("DOCKER_TLS_VERIFY"), "use TLS and verify the remote")
-	flags.StringP("api-version", "a", envString("DOCKER_API_VERSION"), "api version to use by docker client")
+	flags.StringP("api-version", "a", envStringOr("DOCKER_API_VERSION", DockerAPIMinVersion), "api version to use by docker client")
 	flags.BoolP(
 		"registry-tls-skip-verify",
 		"",
@@ -40,7 +40,7 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 	flags.IntP(
 		"interval",
 		"i",
-		envInt("DOCKWATCH_POLL_INTERVAL"),
+		envInt("DOCKWATCH_POLL_INTERVAL", defaultInterval),
 		"Poll interval (in seconds)")
 
 	flags.StringP(
@@ -58,7 +58,7 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 	flags.DurationP(
 		"stop-timeout",
 		"t",
-		envDuration("DOCKWATCH_TIMEOUT"),
+		envDuration("DOCKWATCH_TIMEOUT", 10*time.Second),
 		"Timeout before a container is forcefully stopped")
 
 	flags.BoolP(
@@ -107,7 +107,7 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 	flags.StringP(
 		"log-format",
 		"l",
-		viper.GetString("DOCKWATCH_LOG_FORMAT"),
+		envStringOr("DOCKWATCH_LOG_FORMAT", "auto"),
 		"Sets what logging format to use for console output. Possible values: Auto, LogFmt, Pretty, JSON")
 
 	flags.BoolP(
@@ -197,7 +197,7 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 	flags.BoolP(
 		"no-color",
 		"",
-		viper.IsSet("NO_COLOR"),
+		envIsSet("NO_COLOR"),
 		"Disable ANSI color escape codes in log output")
 
 	flags.StringP(
@@ -214,7 +214,7 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 
 	flags.String(
 		"log-level",
-		envString("DOCKWATCH_LOG_LEVEL"),
+		envStringOr("DOCKWATCH_LOG_LEVEL", "info"),
 		"The maximum log level that will be written to STDERR. Possible values: panic, fatal, error, warn, info, debug or trace")
 
 	flags.BoolP(
@@ -231,34 +231,42 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 }
 
 func envString(key string) string {
-	viper.MustBindEnv(key)
-	return viper.GetString(key)
+	return os.Getenv(key)
 }
 
-func envInt(key string) int {
-	viper.MustBindEnv(key)
-	return viper.GetInt(key)
+func envStringOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func envIsSet(key string) bool {
+	_, ok := os.LookupEnv(key)
+	return ok
+}
+
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
 }
 
 func envBool(key string) bool {
-	viper.MustBindEnv(key)
-	return viper.GetBool(key)
+	v, _ := strconv.ParseBool(os.Getenv(key))
+	return v
 }
 
-func envDuration(key string) time.Duration {
-	viper.MustBindEnv(key)
-	return viper.GetDuration(key)
-}
-
-// SetDefaults provides default values for environment variables
-func SetDefaults() {
-	viper.AutomaticEnv()
-	viper.SetDefault("DOCKER_HOST", "unix:///var/run/docker.sock")
-	viper.SetDefault("DOCKER_API_VERSION", DockerAPIMinVersion)
-	viper.SetDefault("DOCKWATCH_POLL_INTERVAL", defaultInterval)
-	viper.SetDefault("DOCKWATCH_TIMEOUT", time.Second*10)
-	viper.SetDefault("DOCKWATCH_LOG_LEVEL", "info")
-	viper.SetDefault("DOCKWATCH_LOG_FORMAT", "auto")
+func envDuration(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return def
 }
 
 // EnvConfig translates the command-line options into environment variables
