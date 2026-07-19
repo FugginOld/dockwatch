@@ -1,0 +1,30 @@
+name: GHCR cleanup
+
+# One-shot manual cleanup: delete every image version except the one tagged
+# `latest`. Run with dry-run first to preview, then re-run with dry-run off.
+# Delete this file once you have pruned the package.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Preview only (no deletions)"
+        type: boolean
+        default: true
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          package: dockwatch
+          exclude-tags: latest
+          keep-n-tagged: 0
+          delete-untagged: true
+          delete-partial-images: true
+          dry-run: ${{ inputs.dry-run }}
+          token: ${{ secrets.GITHUB_TOKEN }}
