@@ -6,6 +6,8 @@ together see [ARCHITECTURE.md](ARCHITECTURE.md).
 ## Contents
 
 - [Build & install](#build--install)
+- [Updating](#updating)
+- [Uninstalling](#uninstalling)
 - [Running](#running)
 - [Choosing which containers to watch](#choosing-which-containers-to-watch)
 - [HTTP API](#http-api)
@@ -17,10 +19,28 @@ together see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Build & install
 
-Dockwatch builds from source into a self-contained image — nothing is published
-to a registry.
+Run the published multi-arch image (amd64 / arm64 / arm-v7), or build from
+source.
 
-Docker Compose (builds and runs a daily updater):
+Pull the published image (Docker Compose):
+
+```bash
+# docker-compose.yml
+services:
+  dockwatch:
+    image: ghcr.io/fugginold/dockwatch:latest
+    container_name: dockwatch
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: --interval 300
+```
+
+```bash
+docker compose up -d
+```
+
+Build from source instead (Docker Compose):
 
 ```bash
 git clone https://github.com/fugginold/dockwatch.git
@@ -49,6 +69,52 @@ go build -o dockwatch .
 
 Dockwatch needs access to the Docker socket (`/var/run/docker.sock`) to inspect
 and recreate containers.
+
+## Updating
+
+If you run the **published image**, Dockwatch updates itself on its next
+scheduled check — no action needed. To update immediately:
+
+```bash
+# Docker Compose
+docker compose pull dockwatch
+docker compose up -d dockwatch
+
+# docker run
+docker pull ghcr.io/fugginold/dockwatch:latest
+docker rm -f dockwatch
+docker run -d --name dockwatch --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  ghcr.io/fugginold/dockwatch:latest --interval 300
+```
+
+If you **built from source**, a locally-built image has no registry upstream, so
+Dockwatch cannot self-update it. Pull the latest source and rebuild:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+## Uninstalling
+
+```bash
+# Docker Compose
+docker compose down
+
+# docker run
+docker rm -f dockwatch
+```
+
+Optionally remove the image too:
+
+```bash
+docker rmi ghcr.io/fugginold/dockwatch:latest   # published image
+docker rmi dockwatch:latest                      # locally built image
+```
+
+Dockwatch only reads and recreates containers; removing it leaves every watched
+container running and changes nothing else on the host.
 
 ## Running
 
