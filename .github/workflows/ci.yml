@@ -116,7 +116,7 @@ jobs:
           [ "$highest" = "$cur" ] \
             && echo "is_highest=true" >> "$GITHUB_OUTPUT" \
             || echo "is_highest=false" >> "$GITHUB_OUTPUT"
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@v6
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
