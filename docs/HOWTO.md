@@ -24,7 +24,7 @@ source.
 
 Pull the published image (Docker Compose):
 
-```bash
+```yaml
 # docker-compose.yml
 services:
   dockwatch:
