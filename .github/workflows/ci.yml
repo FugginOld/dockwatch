@@ -6,6 +6,12 @@ on:
   push:
     branches: [dev, main]
     tags: ['v*']
+    # Docs-only branch pushes skip CI, so a typo fix does not rebuild and
+    # republish the multi-arch image. Tag pushes are unaffected: GitHub does
+    # not evaluate path filters for tags, so releases still publish.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch: {}
 
 permissions:
