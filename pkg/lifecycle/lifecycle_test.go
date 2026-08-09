@@ -33,6 +33,31 @@ func (e errorClient) ListContainers(_ types.Filter) ([]types.Container, error) {
 // Ensure errorClient satisfies container.Client at compile time.
 var _ container.Client = errorClient{}
 
+// inspectFailClient reproduces what the real client returns when ContainerInspect
+// fails: a zero-value Container (nil containerInfo) alongside the error.
+// See dockerClient.GetContainer in pkg/container/client.go.
+type inspectFailClient struct {
+	mocks.MockClient
+}
+
+func (inspectFailClient) GetContainer(_ types.ContainerID) (types.Container, error) {
+	return &container.Container{}, errors.New("no such container: deadbeef")
+}
+
+var _ container.Client = inspectFailClient{}
+
+// A new container that exits and is auto-removed before we can inspect it must not
+// take down the whole update cycle: the panic unwinds out of the restart loop and
+// leaves every already-stopped container removed and never recreated.
+func TestExecutePostUpdateCommandSurvivesInspectFailure(t *testing.T) {
+	assert.NotPanics(t, func() {
+		lifecycle.ExecutePostUpdateCommand(
+			inspectFailClient{},
+			types.ContainerID("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+		)
+	})
+}
+
 func containerWithLabels(labels map[string]string) types.Container {
 	config := &dockerContainer.Config{
 		Image:  "image:latest",
