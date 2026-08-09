@@ -3,6 +3,8 @@ package container
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -426,11 +428,38 @@ func (client dockerClient) PullImage(ctx context.Context, container t.Container)
 
 	defer response.Close()
 	// the pull request will be aborted prematurely unless the response is read
-	if _, err = io.ReadAll(response); err != nil {
-		log.Error(err)
+	if err := checkPullResponse(response); err != nil {
+		log.WithFields(fields).Error(err)
 		return err
 	}
 	return nil
+}
+
+// checkPullResponse consumes a pull progress stream to completion, returning the
+// first failure the daemon reported in it.
+//
+// ImagePull's return value only covers failures raised before the stream opens, so
+// rate limits, registry 5xx and layer download failures are reported in-band. Left
+// unread, they turn a failed pull into a silent success: the old local image is
+// then inspected, found unchanged, and the container is reported as up to date.
+func checkPullResponse(r io.Reader) error {
+	decoder := json.NewDecoder(r)
+	for {
+		var msg struct {
+			Error string `json:"error"`
+		}
+
+		if err := decoder.Decode(&msg); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+
+		if msg.Error != "" {
+			return errors.New(msg.Error)
+		}
+	}
 }
 
 func (client dockerClient) RemoveImageByID(id t.ImageID) error {

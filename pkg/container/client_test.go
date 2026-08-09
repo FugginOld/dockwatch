@@ -24,6 +24,7 @@ import (
 
 	"context"
 	"net/http"
+	"strings"
 )
 
 var _ = Describe("the client", func() {
@@ -64,6 +65,31 @@ var _ = Describe("the client", func() {
 				Expect(c.WarnOnHeadPullFailed(containerUnknown)).To(BeFalse())
 				Expect(c.WarnOnHeadPullFailed(containerKnown)).To(BeFalse())
 			})
+		})
+	})
+	// ImagePull only reports failures that happen before the stream opens. Rate
+	// limits, registry 5xx and layer download failures arrive as error objects
+	// inside the body, so reading the stream without inspecting it reports a
+	// failed pull as a success -- and the container is then recorded as fresh.
+	When("reading the image pull progress stream", func() {
+		It("should return the error the daemon reported in-band", func() {
+			stream := `{"status":"Pulling from library/nginx","id":"latest"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"a2abf6c4d29d"}
+{"errorDetail":{"message":"toomanyrequests: You have reached your pull rate limit."},"error":"toomanyrequests: You have reached your pull rate limit."}`
+
+			err := checkPullResponse(strings.NewReader(stream))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("toomanyrequests"))
+		})
+		It("should succeed when the stream reports no error", func() {
+			stream := `{"status":"Pulling from library/nginx","id":"latest"}
+{"status":"Digest: sha256:aabbcc"}
+{"status":"Status: Downloaded newer image for nginx:latest"}`
+
+			Expect(checkPullResponse(strings.NewReader(stream))).To(Succeed())
+		})
+		It("should succeed for an empty stream", func() {
+			Expect(checkPullResponse(strings.NewReader(""))).To(Succeed())
 		})
 	})
 	When("pulling the latest image", func() {
