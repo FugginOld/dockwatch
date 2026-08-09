@@ -134,7 +134,11 @@ func GetAuthURL(challenge string, imageRef ref.Named) (*url.URL, error) {
 		return nil, fmt.Errorf("challenge header did not include all values needed to construct an auth url")
 	}
 
-	authURL, _ := url.Parse(values["realm"])
+	authURL, err := url.Parse(values["realm"])
+	if err != nil {
+		return nil, fmt.Errorf("challenge header realm %q is not a valid URL: %w", values["realm"], err)
+	}
+
 	q := authURL.Query()
 	q.Add("service", values["service"])
 

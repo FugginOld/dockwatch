@@ -128,6 +128,24 @@ var _ = Describe("the auth module", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).NotTo(BeNil())
 		})
+		// A registry controls the realm value, so an unparseable one must be an
+		// error rather than a nil dereference: there is no recover() anywhere, so
+		// a panic here takes down the daemon and every other container's updates.
+		It("should return an error when the realm is not a parseable URL", func() {
+			imageRef, err := ref.ParseNormalizedNamed("fugginold/dockwatch")
+			Expect(err).NotTo(HaveOccurred())
+
+			for _, realm := range []string{
+				`https://ghcr.io:notaport/token`, // invalid port
+				`https://ghcr.io/%zz`,            // bad percent-escape
+				`://ghcr.io/token`,               // missing scheme
+			} {
+				input := `bearer realm="` + realm + `",service="ghcr.io"`
+				res, err := auth.GetAuthURL(input, imageRef)
+				Expect(err).To(HaveOccurred(), "realm %q should be rejected", realm)
+				Expect(res).To(BeNil())
+			}
+		})
 	})
 
 	Describe("GetChallengeURL", func() {
