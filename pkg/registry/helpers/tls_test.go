@@ -75,6 +75,19 @@ var _ = Describe("the registry HTTP client", func() {
 		via := []*http.Request{{URL: from}}
 		Expect(client.CheckRedirect(&http.Request{URL: to}, via)).To(HaveOccurred())
 	})
+	It("should refuse a downgrade that happens later in a redirect chain", func() {
+		client := NewHTTPClient()
+
+		first, err := url.Parse("https://registry.example.com/v2/token")
+		Expect(err).NotTo(HaveOccurred())
+		second, err := url.Parse("https://auth.example.com/token")
+		Expect(err).NotTo(HaveOccurred())
+		third, err := url.Parse("http://auth.example.com/token")
+		Expect(err).NotTo(HaveOccurred())
+
+		via := []*http.Request{{URL: first}, {URL: second}}
+		Expect(client.CheckRedirect(&http.Request{URL: third}, via)).To(HaveOccurred())
+	})
 	It("should allow a redirect that stays on https", func() {
 		client := NewHTTPClient()
 

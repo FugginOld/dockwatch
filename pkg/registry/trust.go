@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"sync"
+	"strings"
 
 	"github.com/fugginold/dockwatch/pkg/registry/helpers"
 	cliconfig "github.com/docker/cli/cli/config"
@@ -26,9 +26,18 @@ func EncodedAuth(ref string) (string, error) {
 	return auth, err
 }
 
-// unscopedEnvAuthWarning makes sure the warning below is emitted once rather than
-// once per container per poll.
-var unscopedEnvAuthWarning sync.Once
+// EnvCredentialsAreUnscoped reports whether REPO_USER/REPO_PASS are set without a
+// REPO_HOST to scope them, which means they are offered to whatever registry each
+// watched image lives on.
+//
+// Checked at startup rather than lazily on first use: with REPO_HOST optional, the
+// resulting warning is the only mitigation for the default configuration, so it
+// needs to be in the first screen of logs rather than appearing mid-scan.
+func EnvCredentialsAreUnscoped() bool {
+	return os.Getenv("REPO_USER") != "" &&
+		os.Getenv("REPO_PASS") != "" &&
+		os.Getenv("REPO_HOST") == ""
+}
 
 // EncodedEnvAuth returns an encoded auth config for the given image reference
 // loaded from environment variables.
@@ -52,16 +61,14 @@ func EncodedEnvAuth(imageRef string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if server != repoHost {
+		// Compare normalized: an operator reaches for "docker.io" or the
+		// "https://index.docker.io/v1/" key from config.json long before the
+		// normalized address, and rejecting those reads as a broken credential.
+		if !strings.EqualFold(server, helpers.NormalizeRegistryHost(repoHost)) {
 			log.WithFields(log.Fields{"registry": server, "repo_host": repoHost}).
 				Debug("Environment credentials are scoped to another registry, not using them")
 			return "", errors.New("environment credentials are scoped to a different registry")
 		}
-	} else {
-		unscopedEnvAuthWarning.Do(func() {
-			log.Warn("REPO_USER/REPO_PASS are set without REPO_HOST, so they will be sent to " +
-				"every registry hosting a watched image. Set REPO_HOST to restrict them to one registry.")
-		})
 	}
 
 	auth := types.AuthConfig{

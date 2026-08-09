@@ -300,8 +300,16 @@ them. With it, they are only ever sent to the registry you named, and images
 elsewhere fall back to the Docker config. Dockwatch logs a warning at startup if
 the credentials are set without a scope.
 
-Use the registry host exactly as it appears in the image reference. For Docker
-Hub that is `index.docker.io`.
+`REPO_HOST` accepts the registry as you would write it in an image reference
+(`harbor.example.com`), and for Docker Hub also `docker.io`, `index.docker.io`,
+or the `https://index.docker.io/v1/` key that `docker login` writes into
+`config.json`. Matching is case-insensitive. A port is significant — if your
+images are referenced as `harbor.example.com:5000/...`, include it.
+
+Note that scoping controls which registries dockwatch offers the credentials to.
+The registry still names the token endpoint they are sent to, which is how Docker
+Hub legitimately works (`auth.docker.io` is not `index.docker.io`), so a
+compromised registry you already trust can still redirect them.
 
 ## Configuration reference
 

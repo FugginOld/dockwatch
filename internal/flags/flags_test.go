@@ -1,6 +1,7 @@
 package flags
 
 import (
+	"io/fs"
 	"os"
 	"strings"
 	"testing"
@@ -110,6 +111,21 @@ func TestIsFileRejectsValuesThatCannotBeStatted(t *testing.T) {
 	assert.False(t, isFile(os.TempDir()), "a directory is not a file")
 }
 
+// Requiring a successful stat would classify an unreadable secret file as "not a
+// path", leaving the flag holding the path string -- so the HTTP API would end up
+// guarded by the literal "/run/secrets/api_token" with nothing logged. A file we
+// cannot stat for permission reasons must stay a path so the read fails loudly.
+func TestIsFileStatClassification(t *testing.T) {
+	perm := &fs.PathError{Op: "stat", Path: "/run/secrets/api_token", Err: os.ErrPermission}
+	assert.True(t, isFileStat(nil, perm), "an unreadable path is still a path")
+
+	missing := &fs.PathError{Op: "stat", Path: "/nope", Err: os.ErrNotExist}
+	assert.False(t, isFileStat(nil, missing), "a missing path is not a file")
+
+	invalid := &fs.PathError{Op: "stat", Path: "bad", Err: os.ErrInvalid}
+	assert.False(t, isFileStat(nil, invalid), "an unusable name is not a file")
+}
+
 // An explicit --registry-tls-skip-verify=false must beat a value inherited from the
 // environment. Leaving the variable set means InsecureSkipVerify stays on for every
 // registry HEAD request while the operator believes they asked for verification.
@@ -137,6 +153,39 @@ func TestEnvConfig_ExplicitFalseClearsDockerTLSVerify(t *testing.T) {
 
 	assert.Empty(t, os.Getenv("DOCKER_TLS_VERIFY"),
 		"the docker client treats any non-empty value as verify, so false must unset it")
+}
+
+// The docker client treats any non-empty DOCKER_TLS_VERIFY as a request to verify,
+// while the flag default comes from strconv.ParseBool, which rejects values like
+// "yes" and reads "0"/"false" as false. Clearing the variable for a flag nobody
+// passed would therefore turn daemon TLS verification off for configurations that
+// currently have it on.
+func TestEnvConfig_LeavesUnparseableTLSVerifyAlone(t *testing.T) {
+	for _, value := range []string{"yes", "on", "0", "false"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("DOCKER_TLS_VERIFY", value)
+
+			cmd := new(cobra.Command)
+			RegisterDockerFlags(cmd)
+			require.NoError(t, cmd.ParseFlags([]string{}))
+			require.NoError(t, EnvConfig(cmd))
+
+			assert.Equal(t, value, os.Getenv("DOCKER_TLS_VERIFY"),
+				"an untouched flag must not clear the variable")
+		})
+	}
+}
+
+func TestEnvConfig_LeavesRegistrySkipVerifyAloneWhenFlagUntouched(t *testing.T) {
+	t.Setenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", "yes")
+
+	cmd := new(cobra.Command)
+	RegisterDockerFlags(cmd)
+	require.NoError(t, cmd.ParseFlags([]string{}))
+	require.NoError(t, EnvConfig(cmd))
+
+	assert.Equal(t, "yes", os.Getenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY"),
+		"an untouched flag must not clear the variable")
 }
 
 func TestProcessFlagAliases(t *testing.T) {

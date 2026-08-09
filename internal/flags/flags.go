@@ -2,6 +2,7 @@ package flags
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -294,13 +295,13 @@ func EnvConfig(cmd *cobra.Command) error {
 	if err = setEnvOptStr("DOCKER_HOST", host); err != nil {
 		return err
 	}
-	if err = setEnvOptBool("DOCKER_TLS_VERIFY", tls); err != nil {
+	if err = setEnvOptBool("DOCKER_TLS_VERIFY", tls, flags.Changed("tlsverify")); err != nil {
 		return err
 	}
 	if err = setEnvOptStr("DOCKER_API_VERSION", version); err != nil {
 		return err
 	}
-	if err = setEnvOptBool("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", registryTLSSkipVerify); err != nil {
+	if err = setEnvOptBool("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", registryTLSSkipVerify, flags.Changed("registry-tls-skip-verify")); err != nil {
 		return err
 	}
 	return nil
@@ -353,13 +354,20 @@ func setEnvOptStr(env string, opt string) error {
 // inherited from the environment, so --registry-tls-skip-verify=false left
 // InsecureSkipVerify on.
 //
-// False unsets rather than writing "0": the docker client treats any non-empty
-// DOCKER_TLS_VERIFY as a request to verify, so "0" would mean the opposite of what
-// was asked. Both flags default to their environment value, so this only takes
-// effect when false was passed explicitly.
-func setEnvOptBool(env string, opt bool) error {
+// A false value clears the variable only when the operator actually passed the flag.
+// The flag default comes from envBool, which uses strconv.ParseBool, while the docker
+// client asks only whether DOCKER_TLS_VERIFY is non-empty -- so "yes", "on", "0" and
+// "false" all yield a false default while the daemon connection is verifying today.
+// Clearing on a default-valued flag would silently turn that verification off.
+//
+// Clearing rather than writing "0" for the same reason: to the docker client "0" is
+// non-empty and therefore means verify, the opposite of what was asked.
+func setEnvOptBool(env string, opt bool, flagChanged bool) error {
 	if opt {
 		return setEnvOptStr(env, "1")
+	}
+	if !flagChanged {
+		return nil
 	}
 	return os.Unsetenv(env)
 }
@@ -369,6 +377,9 @@ func setEnvOptBool(env string, opt bool) error {
 func GetSecretsFromFiles(rootCmd *cobra.Command) {
 	flags := rootCmd.PersistentFlags()
 
+	// Keep these string-valued. The fatal below interpolates the error, which is safe
+	// only because a failed flags.Set on a string flag cannot contain the value; a
+	// Duration or Int secret would return a strconv error carrying the file contents.
 	secrets := []string{
 		"http-api-token",
 	}
@@ -429,12 +440,22 @@ func isFile(s string) bool {
 		// This still allows for paths that start with 'c:\' etc.
 		return false
 	}
-	// Only a value we can actually stat is a path. Treating every other stat error
-	// as "this is a file" makes any value too long or malformed for the filesystem
-	// -- a strong random token, for instance -- get read as a filename, and the
-	// resulting error carries that value into the logs.
-	info, err := os.Stat(s)
-	return err == nil && !info.IsDir()
+	return isFileStat(os.Stat(s))
+}
+
+// isFileStat decides whether a stat result means "this value is a path".
+//
+// A value too long or malformed for the filesystem -- a strong random token, for
+// instance -- must not be read as a filename, or the resulting error carries the
+// secret into the logs. But a path we merely cannot stat, typically because the
+// file or a parent directory is not readable by this user, is still a path: saying
+// otherwise would leave the flag holding the path string and use that as the
+// secret, so an unreadable token file would silently become a guessable one.
+func isFileStat(info os.FileInfo, err error) bool {
+	if err == nil {
+		return info != nil && !info.IsDir()
+	}
+	return errors.Is(err, os.ErrPermission)
 }
 
 // ProcessFlagAliases updates the value of flags that are being set by helper flags
