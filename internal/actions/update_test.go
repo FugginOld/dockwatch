@@ -115,10 +115,13 @@ var _ = Describe("the update action", func() {
 
 				report, err := actions.Update(client, types.UpdateParams{})
 				Expect(err).NotTo(HaveOccurred())
-				// Note: Linked containers that were skipped for recreation is not counted in Failed
-				// If this happens, an error is emitted to the logs, so a notification should still be sent.
+				// The linked container could not be recreated. Its image never changed,
+				// but it is not up to date -- it is stopped and gone -- so it belongs in
+				// Failed rather than Fresh, where the operator (and the notification)
+				// would read it as healthy.
 				Expect(report.Updated()).To(HaveLen(1))
-				Expect(report.Fresh()).To(HaveLen(1))
+				Expect(report.Failed()).To(HaveLen(1))
+				Expect(report.Fresh()).To(BeEmpty())
 			})
 		})
 	})

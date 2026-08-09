@@ -45,9 +45,17 @@ func (m Progress) Add(update *ContainerStatus) {
 	m[update.containerID] = update
 }
 
-// MarkForUpdate marks the container identified by containerID for update
+// MarkForUpdate marks the container identified by containerID for update.
+//
+// A container already recorded as skipped keeps that state: actions.Update marks
+// every container that is not monitor-only, including ones whose staleness check
+// failed, and those were never established to be up to date.
 func (m Progress) MarkForUpdate(containerID types.ContainerID) {
-	m[containerID].state = UpdatedState
+	update, ok := m[containerID]
+	if !ok || update.state == SkippedState {
+		return
+	}
+	update.state = UpdatedState
 }
 
 // MarkSkipped marks a container that was queued for update as intentionally skipped.

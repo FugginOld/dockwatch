@@ -79,6 +79,16 @@ func NewReport(progress Progress) types.Report {
 		}
 
 		report.scanned = append(report.scanned, update)
+
+		// A failure is reported as a failure regardless of whether the image
+		// changed. A container that was stopped and removed as part of another
+		// container's update, and then failed to start, still has its original
+		// image -- but it is deleted and not running, not up to date.
+		if update.state == FailedState {
+			report.failed = append(report.failed, update)
+			continue
+		}
+
 		if update.newImage == update.oldImage {
 			update.state = FreshState
 			report.fresh = append(report.fresh, update)
@@ -88,8 +98,6 @@ func NewReport(progress Progress) types.Report {
 		switch update.state {
 		case UpdatedState:
 			report.updated = append(report.updated, update)
-		case FailedState:
-			report.failed = append(report.failed, update)
 		default:
 			update.state = StaleState
 			report.stale = append(report.stale, update)
