@@ -106,6 +106,27 @@ var _ = Describe("the client", func() {
 				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
 			})
 		})
+		// The daemon removes an AutoRemove container asynchronously after it exits.
+		// Returning as soon as it stops races the recreate against that removal, and
+		// ContainerCreate then fails with a 409 name conflict.
+		When("the container is set to auto-remove", func() {
+			It("should wait for the removal to complete before returning", func() {
+				container := MockContainer(
+					WithContainerState(dockercontainer.State{Running: true}),
+					WithAutoRemove(true),
+				)
+
+				cid := container.ContainerInfo().ID
+				mockServer.AppendHandlers(
+					mocks.KillContainerHandler(cid, mocks.Found),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerRemoval
+				)
+
+				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
+				Expect(mockServer.ReceivedRequests()).To(HaveLen(3), "the removal wait must be issued for AutoRemove containers too")
+			})
+		})
 	})
 	When("removing a image", func() {
 		When("debug logging is enabled", func() {

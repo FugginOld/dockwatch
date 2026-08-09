@@ -223,10 +223,13 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 			}
 			return err
 		}
+	}
 
-		if err := client.waitForContainerRemoval(c, timeout); err != nil {
-			return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
-		}
+	// The daemon removes the container asynchronously in both cases -- on our
+	// request above, or on its own for AutoRemove containers. Recreating before
+	// that finishes fails with a 409 name conflict, so wait for it either way.
+	if err := client.waitForContainerRemoval(c, timeout); err != nil {
+		return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
 	}
 
 	return nil
