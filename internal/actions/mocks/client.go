@@ -21,6 +21,9 @@ type TestData struct {
 	NameOfContainerToKeep   string
 	Containers              []t.Container
 	Staleness               map[string]bool
+	// StalenessError maps a container name to the error its staleness check should
+	// return, for exercising the paths where dockwatch cannot determine staleness.
+	StalenessError map[string]error
 }
 
 // TriedToRemoveImage is a test helper function to check whether RemoveImageByID has been called
@@ -90,8 +93,14 @@ func (client MockClient) ExecuteCommand(_ t.ContainerID, command string, _ int) 
 	}
 }
 
-// IsContainerStale is true if not explicitly stated in TestData for the mock client
+// IsContainerStale is true if not explicitly stated in TestData for the mock client.
+// A container named in StalenessError fails its check instead, as it would when the
+// registry is unreachable or the credentials have expired.
 func (client MockClient) IsContainerStale(cont t.Container, params t.UpdateParams) (bool, t.ImageID, error) {
+	if err, found := client.TestData.StalenessError[cont.Name()]; found {
+		return false, "", err
+	}
+
 	stale, found := client.TestData.Staleness[cont.Name()]
 	if !found {
 		stale = true

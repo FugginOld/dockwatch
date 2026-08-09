@@ -427,7 +427,9 @@ func (client dockerClient) PullImage(ctx context.Context, container t.Container)
 	}
 
 	defer response.Close()
-	// the pull request will be aborted prematurely unless the response is read
+	// The pull is aborted prematurely unless the response is consumed, which
+	// checkPullResponse does -- except when it returns early on a reported failure,
+	// where the pull has already failed and the Close below releases the connection.
 	if err := checkPullResponse(response); err != nil {
 		log.WithFields(fields).Error(err)
 		return err
@@ -445,7 +447,14 @@ func (client dockerClient) PullImage(ctx context.Context, container t.Container)
 func checkPullResponse(r io.Reader) error {
 	decoder := json.NewDecoder(r)
 	for {
+		// errorDetail is the canonical field; the flat "error" has been deprecated
+		// since API v1.4 and is documented as omitted in a future release. Docker's
+		// own reader checks errorDetail first, so match that precedence rather than
+		// depending on a field that is scheduled to disappear.
 		var msg struct {
+			ErrorDetail *struct {
+				Message string `json:"message"`
+			} `json:"errorDetail"`
 			Error string `json:"error"`
 		}
 
@@ -456,6 +465,9 @@ func checkPullResponse(r io.Reader) error {
 			return err
 		}
 
+		if msg.ErrorDetail != nil && msg.ErrorDetail.Message != "" {
+			return errors.New(msg.ErrorDetail.Message)
+		}
 		if msg.Error != "" {
 			return errors.New(msg.Error)
 		}

@@ -283,6 +283,15 @@ func RemoveContainerHandler(containerID string, found FoundStatus) http.HandlerF
 	)
 }
 
+// ImagePullHandler mocks the POST images/create endpoint, returning the supplied
+// newline-delimited JSON progress stream as the daemon would.
+func ImagePullHandler(progressStream string) http.HandlerFunc {
+	return ghttp.CombineHandlers(
+		ghttp.VerifyRequest("POST", O.HaveSuffix("images/create")),
+		ghttp.RespondWith(http.StatusOK, progressStream),
+	)
+}
+
 // RemoveContainerConflictHandler mocks the DELETE containers/{id} endpoint responding
 // with the 409 the daemon returns when a removal of that container is already underway.
 func RemoveContainerConflictHandler(containerID string) http.HandlerFunc {

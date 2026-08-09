@@ -81,6 +81,17 @@ var _ = Describe("the client", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("toomanyrequests"))
 		})
+		// errorDetail is the canonical field. The flat "error" is deprecated since
+		// API v1.4 and documented as omitted in a future release, so relying on it
+		// alone would silently restore the bug on a newer daemon.
+		It("should return the error when only errorDetail is present", func() {
+			stream := `{"status":"Pulling from library/nginx","id":"latest"}
+{"errorDetail":{"message":"toomanyrequests: You have reached your pull rate limit."}}`
+
+			err := checkPullResponse(strings.NewReader(stream))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("toomanyrequests"))
+		})
 		It("should succeed when the stream reports no error", func() {
 			stream := `{"status":"Pulling from library/nginx","id":"latest"}
 {"status":"Digest: sha256:aabbcc"}
@@ -93,6 +104,20 @@ var _ = Describe("the client", func() {
 		})
 	})
 	When("pulling the latest image", func() {
+		// Guards the wiring, not just the parsing: without this, reverting PullImage to
+		// drain the stream with io.ReadAll leaves checkPullResponse unused and every
+		// test still green.
+		It("should fail when the daemon reports an error in the progress stream", func() {
+			c := MockContainer(WithImageName(mockServer.Addr() + "/library/nginx:latest"))
+			mockServer.AppendHandlers(mocks.ImagePullHandler(
+				`{"status":"Pulling from library/nginx","id":"latest"}
+{"errorDetail":{"message":"toomanyrequests: You have reached your pull rate limit."},"error":"toomanyrequests: You have reached your pull rate limit."}`))
+
+			err := dockerClient{api: docker}.PullImage(context.Background(), c)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("toomanyrequests"))
+		})
 		When("the image consist of a pinned hash", func() {
 			It("should gracefully fail with a useful message", func() {
 				c := dockerClient{}
