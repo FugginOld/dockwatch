@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"sync"
 
 	"github.com/fugginold/dockwatch/pkg/registry/helpers"
 	cliconfig "github.com/docker/cli/cli/config"
@@ -18,32 +19,61 @@ import (
 // loaded from environment variables or docker config
 // as available in that order
 func EncodedAuth(ref string) (string, error) {
-	auth, err := EncodedEnvAuth()
+	auth, err := EncodedEnvAuth(ref)
 	if err != nil {
 		auth, err = EncodedConfigAuth(ref)
 	}
 	return auth, err
 }
 
-// EncodedEnvAuth returns an encoded auth config for the given registry
-// loaded from environment variables
-// Returns an error if authentication environment variables have not been set
-func EncodedEnvAuth() (string, error) {
+// unscopedEnvAuthWarning makes sure the warning below is emitted once rather than
+// once per container per poll.
+var unscopedEnvAuthWarning sync.Once
+
+// EncodedEnvAuth returns an encoded auth config for the given image reference
+// loaded from environment variables.
+//
+// REPO_HOST, when set, restricts those credentials to a single registry. Without
+// it they are offered to whatever registry the image happens to live on, so a
+// single watched image on a hostile or typosquatted registry is enough to collect
+// them -- which is why docker's own credential lookup is per-registry.
+//
+// Returns an error if the variables are unset, or if they are scoped to a
+// different registry than the image, so the caller falls back to the docker config.
+func EncodedEnvAuth(imageRef string) (string, error) {
 	username := os.Getenv("REPO_USER")
 	password := os.Getenv("REPO_PASS")
-	if username != "" && password != "" {
-		auth := types.AuthConfig{
-			Username: username,
-			Password: password,
-		}
-    
-		log.Debugf("Loaded auth credentials for registry user %s from environment", auth.Username)
-		// CREDENTIAL: Uncomment to log REPO_PASS environment variable
-		// log.Tracef("Using auth password %s", auth.Password)
-
-		return EncodeAuth(auth)
+	if username == "" || password == "" {
+		return "", errors.New("registry auth environment variables (REPO_USER, REPO_PASS) not set")
 	}
-	return "", errors.New("registry auth environment variables (REPO_USER, REPO_PASS) not set")
+
+	if repoHost := os.Getenv("REPO_HOST"); repoHost != "" {
+		server, err := helpers.GetRegistryAddress(imageRef)
+		if err != nil {
+			return "", err
+		}
+		if server != repoHost {
+			log.WithFields(log.Fields{"registry": server, "repo_host": repoHost}).
+				Debug("Environment credentials are scoped to another registry, not using them")
+			return "", errors.New("environment credentials are scoped to a different registry")
+		}
+	} else {
+		unscopedEnvAuthWarning.Do(func() {
+			log.Warn("REPO_USER/REPO_PASS are set without REPO_HOST, so they will be sent to " +
+				"every registry hosting a watched image. Set REPO_HOST to restrict them to one registry.")
+		})
+	}
+
+	auth := types.AuthConfig{
+		Username: username,
+		Password: password,
+	}
+
+	log.Debugf("Loaded auth credentials for registry user %s from environment", auth.Username)
+	// CREDENTIAL: Uncomment to log REPO_PASS environment variable
+	// log.Tracef("Using auth password %s", auth.Password)
+
+	return EncodeAuth(auth)
 }
 
 // EncodedConfigAuth returns an encoded auth config for the given registry

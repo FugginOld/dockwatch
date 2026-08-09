@@ -14,6 +14,7 @@ together see [ARCHITECTURE.md](ARCHITECTURE.md).
 - [Prometheus metrics](#prometheus-metrics)
 - [Lifecycle hooks & restart behavior](#lifecycle-hooks--restart-behavior)
 - [Connecting to a remote Docker host](#connecting-to-a-remote-docker-host)
+- [Private registry credentials](#private-registry-credentials)
 - [Configuration reference](#configuration-reference)
 - [Development](#development)
 
@@ -271,6 +272,36 @@ dockwatch \
 The equivalent standard Docker environment variables (`DOCKER_HOST`,
 `DOCKER_TLS_VERIFY`, `DOCKER_API_VERSION`) are also honored. Minimum Docker API
 version is `1.25`.
+
+## Private registry credentials
+
+Dockwatch reads credentials from the Docker config file, so the simplest setup is
+to `docker login` on the host and mount the result read-only:
+
+```bash
+docker run -d \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $HOME/.docker/config.json:/config.json:ro \
+  ghcr.io/fugginold/dockwatch
+```
+
+Credentials can also come from the environment:
+
+| Variable | Description |
+|---|---|
+| `REPO_USER` | Registry username |
+| `REPO_PASS` | Registry password or token |
+| `REPO_HOST` | Registry these credentials belong to, e.g. `harbor.example.com` |
+
+**Set `REPO_HOST` whenever you use `REPO_USER`/`REPO_PASS`.** Without it, those
+credentials are offered to whatever registry each watched image lives on — so a
+single image from an untrusted or typosquatted registry is enough to collect
+them. With it, they are only ever sent to the registry you named, and images
+elsewhere fall back to the Docker config. Dockwatch logs a warning at startup if
+the credentials are set without a scope.
+
+Use the registry host exactly as it appears in the image reference. For Docker
+Hub that is `index.docker.io`.
 
 ## Configuration reference
 
