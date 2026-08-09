@@ -106,6 +106,25 @@ var _ = Describe("the client", func() {
 				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
 			})
 		})
+		// --stop-timeout bounds how long we wait for a graceful stop, not how long the
+		// daemon takes to remove the container afterwards. Giving up on the removal
+		// early reports a failed stop, and the caller then never recreates a container
+		// that the daemon goes on to remove a moment later.
+		When("the removal takes longer than the stop timeout", func() {
+			It("should still wait for the removal to complete", func() {
+				container := MockContainer(WithContainerState(dockercontainer.State{Running: true}))
+
+				cid := container.ContainerInfo().ID
+				mockServer.AppendHandlers(
+					mocks.KillContainerHandler(cid, mocks.Found),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
+					mocks.RemoveContainerHandler(cid, mocks.Found),
+					mocks.DelayedWaitContainerHandler(cid, 400*time.Millisecond), // waitForContainerRemoval
+				)
+
+				Expect(dockerClient{api: docker}.StopContainer(container, 100*time.Millisecond)).To(Succeed())
+			})
+		})
 		// The daemon removes an AutoRemove container asynchronously after it exits.
 		// Returning as soon as it stops races the recreate against that removal, and
 		// ContainerCreate then fails with a 409 name conflict.

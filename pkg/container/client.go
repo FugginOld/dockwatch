@@ -23,6 +23,16 @@ import (
 
 const defaultStopSignal = "SIGTERM"
 
+// containerRemovalTimeout bounds how long we wait for the daemon to finish removing
+// a container. It is deliberately not the user's --stop-timeout: that budget covers
+// the graceful stop, and removal is a separate operation whose duration depends on
+// the writable layer rather than on the process shutting down.
+//
+// The costs are asymmetric. Waiting too long only slows an update cycle, while
+// giving up too early reports a failed stop for a container the daemon removes
+// moments later -- and the restart pass then skips it, so it is gone for good.
+const containerRemovalTimeout = 1 * time.Minute
+
 // A Client is the interface through which dockwatch interacts with the
 // Docker API.
 type Client interface {
@@ -228,7 +238,7 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 	// The daemon removes the container asynchronously in both cases -- on our
 	// request above, or on its own for AutoRemove containers. Recreating before
 	// that finishes fails with a 409 name conflict, so wait for it either way.
-	if err := client.waitForContainerRemoval(c, timeout); err != nil {
+	if err := client.waitForContainerRemoval(c, containerRemovalTimeout); err != nil {
 		return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
 	}
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/onsi/ginkgo"
 
@@ -240,6 +241,23 @@ func WaitContainerHandler(containerID string, found FoundStatus) http.HandlerFun
 	return ghttp.CombineHandlers(
 		ghttp.VerifyRequest("POST", O.HaveSuffix("containers/%s/wait", containerID)),
 		responseHandler,
+	)
+}
+
+// DelayedWaitContainerHandler mocks the POST containers/{id}/wait endpoint, responding
+// only after the supplied delay. Used to simulate a removal that takes longer to
+// complete than the caller's stop timeout allows.
+func DelayedWaitContainerHandler(containerID string, delay time.Duration) http.HandlerFunc {
+	return ghttp.CombineHandlers(
+		ghttp.VerifyRequest("POST", O.HaveSuffix("containers/%s/wait", containerID)),
+		func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-time.After(delay):
+			case <-r.Context().Done():
+				return
+			}
+			ghttp.RespondWithJSONEncoded(http.StatusOK, map[string]interface{}{"StatusCode": 0})(w, r)
+		},
 	)
 }
 
