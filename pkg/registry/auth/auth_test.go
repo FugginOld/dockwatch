@@ -11,8 +11,8 @@ import (
 	"github.com/fugginold/dockwatch/internal/actions/mocks"
 	"github.com/fugginold/dockwatch/pkg/registry/auth"
 
-	wtTypes "github.com/fugginold/dockwatch/pkg/types"
 	ref "github.com/distribution/reference"
+	wtTypes "github.com/fugginold/dockwatch/pkg/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -127,6 +127,25 @@ var _ = Describe("the auth module", func() {
 			res, err := auth.GetAuthURL(input, imageRef)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(res).NotTo(BeNil())
+		})
+		// The registry chooses the realm, so it also chooses where our credentials go
+		// and over what transport. A plaintext realm turns the Basic header into
+		// cleartext credentials for anyone on the path.
+		It("should reject a realm that is not https", func() {
+			imageRef, err := ref.ParseNormalizedNamed("fugginold/dockwatch")
+			Expect(err).NotTo(HaveOccurred())
+
+			for _, realm := range []string{
+				`http://ghcr.io/token`, // plaintext
+				`ftp://ghcr.io/token`,  // not http at all
+				`/token`,               // scheme-relative, no host
+				`https:///token`,       // https but no host
+			} {
+				input := `bearer realm="` + realm + `",service="ghcr.io"`
+				res, err := auth.GetAuthURL(input, imageRef)
+				Expect(err).To(HaveOccurred(), "realm %q should be rejected", realm)
+				Expect(res).To(BeNil())
+			}
 		})
 		// A registry controls the realm value, so an unparseable one must be an
 		// error rather than a nil dereference: there is no recover() anywhere, so

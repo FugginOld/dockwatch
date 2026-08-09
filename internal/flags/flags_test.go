@@ -2,6 +2,7 @@ package flags
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -96,6 +97,46 @@ func TestHTTPAPIPeriodicPollsFlag(t *testing.T) {
 func TestIsFile(t *testing.T) {
 	assert.False(t, isFile("https://google.com"), "an URL should never be considered a file")
 	assert.True(t, isFile(os.Args[0]), "the currently running binary path should always be considered a file")
+}
+
+// A secret is only a file path if stat actually succeeded. Treating every stat
+// error except ErrNotExist as "this is a file" turns a strong random token into a
+// fatal startup error -- and the error it logs embeds the token.
+func TestIsFileRejectsValuesThatCannotBeStatted(t *testing.T) {
+	// Longer than any single path component: ENAMETOOLONG on Linux, ERROR_INVALID_NAME
+	// on Windows. Neither is ErrNotExist.
+	assert.False(t, isFile(strings.Repeat("a", 300)), "an over-long token is not a file")
+
+	assert.False(t, isFile(os.TempDir()), "a directory is not a file")
+}
+
+// An explicit --registry-tls-skip-verify=false must beat a value inherited from the
+// environment. Leaving the variable set means InsecureSkipVerify stays on for every
+// registry HEAD request while the operator believes they asked for verification.
+func TestEnvConfig_ExplicitFalseClearsRegistryTLSSkipVerify(t *testing.T) {
+	t.Setenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", "1")
+
+	cmd := new(cobra.Command)
+	RegisterDockerFlags(cmd)
+	require.NoError(t, cmd.ParseFlags([]string{`--registry-tls-skip-verify=false`}))
+	require.NoError(t, EnvConfig(cmd))
+
+	assert.False(t, envBool("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY"),
+		"an explicit false must not leave the inherited value in place")
+}
+
+// The flag defaults to the environment value, so this only fires when the operator
+// passes false explicitly -- at which point their instruction wins.
+func TestEnvConfig_ExplicitFalseClearsDockerTLSVerify(t *testing.T) {
+	t.Setenv("DOCKER_TLS_VERIFY", "1")
+
+	cmd := new(cobra.Command)
+	RegisterDockerFlags(cmd)
+	require.NoError(t, cmd.ParseFlags([]string{`--tlsverify=false`}))
+	require.NoError(t, EnvConfig(cmd))
+
+	assert.Empty(t, os.Getenv("DOCKER_TLS_VERIFY"),
+		"the docker client treats any non-empty value as verify, so false must unset it")
 }
 
 func TestProcessFlagAliases(t *testing.T) {

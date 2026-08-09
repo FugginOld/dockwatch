@@ -1,6 +1,8 @@
 package helpers
 
 import (
+	"net/http"
+	"net/url"
 	"os"
 
 	. "github.com/onsi/ginkgo"
@@ -53,5 +55,35 @@ var _ = Describe("ShouldSkipRegistryTLSVerify", func() {
 	It("returns false and does not panic when the env var has an invalid value", func() {
 		_ = os.Setenv(envKey, "notabool")
 		Expect(ShouldSkipRegistryTLSVerify()).To(BeFalse())
+	})
+})
+
+// Go's stdlib drops the Authorization header across a redirect to a different host,
+// but it compares hosts only -- not schemes. Without a policy of our own, a registry
+// that redirects https -> http on the same host receives the bearer token in
+// cleartext.
+var _ = Describe("the registry HTTP client", func() {
+	It("should refuse a redirect that downgrades https to http", func() {
+		client := NewHTTPClient()
+		Expect(client.CheckRedirect).NotTo(BeNil(), "the client needs a redirect policy")
+
+		from, err := url.Parse("https://registry.example.com/v2/token")
+		Expect(err).NotTo(HaveOccurred())
+		to, err := url.Parse("http://registry.example.com/v2/token")
+		Expect(err).NotTo(HaveOccurred())
+
+		via := []*http.Request{{URL: from}}
+		Expect(client.CheckRedirect(&http.Request{URL: to}, via)).To(HaveOccurred())
+	})
+	It("should allow a redirect that stays on https", func() {
+		client := NewHTTPClient()
+
+		from, err := url.Parse("https://registry.example.com/v2/token")
+		Expect(err).NotTo(HaveOccurred())
+		to, err := url.Parse("https://auth.example.com/token")
+		Expect(err).NotTo(HaveOccurred())
+
+		via := []*http.Request{{URL: from}}
+		Expect(client.CheckRedirect(&http.Request{URL: to}, via)).To(Succeed())
 	})
 })

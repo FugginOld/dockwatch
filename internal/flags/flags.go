@@ -2,7 +2,6 @@ package flags
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -349,11 +348,20 @@ func setEnvOptStr(env string, opt string) error {
 	return nil
 }
 
+// setEnvOptBool writes a boolean flag through to its environment variable, in both
+// directions. Only setting it meant an explicit false could never override a value
+// inherited from the environment, so --registry-tls-skip-verify=false left
+// InsecureSkipVerify on.
+//
+// False unsets rather than writing "0": the docker client treats any non-empty
+// DOCKER_TLS_VERIFY as a request to verify, so "0" would mean the opposite of what
+// was asked. Both flags default to their environment value, so this only takes
+// effect when false was passed explicitly.
 func setEnvOptBool(env string, opt bool) error {
 	if opt {
 		return setEnvOptStr(env, "1")
 	}
-	return nil
+	return os.Unsetenv(env)
 }
 
 // GetSecretsFromFiles checks if passwords/tokens/webhooks have been passed as a file instead of plaintext.
@@ -421,8 +429,12 @@ func isFile(s string) bool {
 		// This still allows for paths that start with 'c:\' etc.
 		return false
 	}
-	_, err := os.Stat(s)
-	return !errors.Is(err, os.ErrNotExist)
+	// Only a value we can actually stat is a path. Treating every other stat error
+	// as "this is a file" makes any value too long or malformed for the filesystem
+	// -- a strong random token, for instance -- get read as a filename, and the
+	// resulting error carries that value into the logs.
+	info, err := os.Stat(s)
+	return err == nil && !info.IsDir()
 }
 
 // ProcessFlagAliases updates the value of flags that are being set by helper flags

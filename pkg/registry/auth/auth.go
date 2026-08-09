@@ -139,6 +139,13 @@ func GetAuthURL(challenge string, imageRef ref.Named) (*url.URL, error) {
 		return nil, fmt.Errorf("challenge header realm %q is not a valid URL: %w", values["realm"], err)
 	}
 
+	// The registry picks the realm, so it picks where the credentials in the next
+	// request are sent and over what transport. Requiring https with a host means a
+	// registry cannot downgrade us to sending a Basic header in cleartext.
+	if authURL.Scheme != "https" || authURL.Host == "" {
+		return nil, fmt.Errorf("challenge header realm %q must be an https URL with a host", values["realm"])
+	}
+
 	q := authURL.Query()
 	q.Add("service", values["service"])
 

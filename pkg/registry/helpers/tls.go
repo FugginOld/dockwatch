@@ -2,6 +2,8 @@ package helpers
 
 import (
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -60,7 +62,22 @@ func NewHTTPClient() *http.Client {
 			TLSClientConfig:       &tls.Config{InsecureSkipVerify: skipTLSVerify}, //nolint:gosec // controlled by explicit env var
 		}
 
-		registryClient = &http.Client{Transport: tr}
+		registryClient = &http.Client{
+			Transport: tr,
+			// net/http strips the Authorization header when a redirect crosses to a
+			// different host, but it compares hosts only, not schemes. A registry that
+			// redirects https -> http on the same host would therefore be handed the
+			// bearer token in cleartext.
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) > 0 && via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+					return fmt.Errorf("refusing redirect from https to %s: registry credentials would be sent in cleartext", req.URL.Scheme)
+				}
+				if len(via) >= 10 {
+					return errors.New("stopped after 10 redirects")
+				}
+				return nil
+			},
+		}
 	})
 
 	return registryClient
