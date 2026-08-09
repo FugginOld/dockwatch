@@ -106,6 +106,75 @@ var _ = Describe("the client", func() {
 				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
 			})
 		})
+		// The removal budget is a floor, not a replacement for what the caller asked
+		// for: cleanupExcessDockwatchs deliberately passes 10 minutes.
+		When("deciding how long to wait for a removal", func() {
+			It("should raise a stop timeout that is below the floor", func() {
+				Expect(removalTimeout(3 * time.Second)).To(Equal(containerRemovalTimeout))
+			})
+			It("should honour a caller asking for longer than the floor", func() {
+				Expect(removalTimeout(10 * time.Minute)).To(Equal(10 * time.Minute))
+			})
+		})
+		// --stop-timeout bounds how long we wait for a graceful stop, not how long the
+		// daemon takes to remove the container afterwards. Giving up on the removal
+		// early reports a failed stop, and the caller then never recreates a container
+		// that the daemon goes on to remove a moment later.
+		When("the removal takes longer than the stop timeout", func() {
+			It("should still wait for the removal to complete", func() {
+				container := MockContainer(WithContainerState(dockercontainer.State{Running: true}))
+
+				cid := container.ContainerInfo().ID
+				mockServer.AppendHandlers(
+					mocks.KillContainerHandler(cid, mocks.Found),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
+					mocks.RemoveContainerHandler(cid, mocks.Found),
+					mocks.DelayedWaitContainerHandler(cid, 1500*time.Millisecond), // waitForContainerRemoval
+				)
+
+				Expect(dockerClient{api: docker}.StopContainer(container, 500*time.Millisecond)).To(Succeed())
+			})
+		})
+		// A 409 here means the daemon is already removing the container, which is the
+		// outcome we wanted. Reporting it as a failed stop makes the restart pass skip
+		// a container that is about to disappear -- losing it for good.
+		When("the daemon reports a removal already in progress", func() {
+			It("should wait for that removal rather than failing the stop", func() {
+				container := MockContainer(WithContainerState(dockercontainer.State{Running: true}))
+
+				cid := container.ContainerInfo().ID
+				mockServer.AppendHandlers(
+					mocks.KillContainerHandler(cid, mocks.Found),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
+					mocks.RemoveContainerConflictHandler(cid),
+					mocks.WaitRemovedContainerHandler(cid), // waitForContainerRemoval
+				)
+
+				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
+				Expect(mockServer.ReceivedRequests()).To(HaveLen(4))
+			})
+		})
+		// The daemon removes an AutoRemove container asynchronously after it exits.
+		// Returning as soon as it stops races the recreate against that removal, and
+		// ContainerCreate then fails with a 409 name conflict.
+		When("the container is set to auto-remove", func() {
+			It("should wait for the removal to complete before returning", func() {
+				container := MockContainer(
+					WithContainerState(dockercontainer.State{Running: true}),
+					WithAutoRemove(true),
+				)
+
+				cid := container.ContainerInfo().ID
+				mockServer.AppendHandlers(
+					mocks.KillContainerHandler(cid, mocks.Found),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerRemoval
+				)
+
+				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
+				Expect(mockServer.ReceivedRequests()).To(HaveLen(3), "the removal wait must be issued for AutoRemove containers too")
+			})
+		})
 	})
 	When("removing a image", func() {
 		When("debug logging is enabled", func() {

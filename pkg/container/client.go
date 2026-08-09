@@ -23,6 +23,23 @@ import (
 
 const defaultStopSignal = "SIGTERM"
 
+// containerRemovalTimeout is the minimum time we allow the daemon to finish removing
+// a container. It is deliberately decoupled from the user's --stop-timeout: that
+// budget covers the graceful stop, and removal is a separate operation whose duration
+// depends on the writable layer rather than on the process shutting down.
+//
+// The costs are asymmetric. Waiting too long only slows an update cycle, while
+// giving up too early reports a failed stop for a container the daemon removes
+// moments later -- and the restart pass then skips it, so it is gone for good.
+const containerRemovalTimeout = 1 * time.Minute
+
+// removalTimeout is the budget for confirming a removal. containerRemovalTimeout is a
+// floor rather than a fixed value, so a caller that deliberately asks for longer --
+// cleanupExcessDockwatchs passes 10 minutes -- still gets what it asked for.
+func removalTimeout(stopTimeout time.Duration) time.Duration {
+	return max(stopTimeout, containerRemovalTimeout)
+}
+
 // A Client is the interface through which dockwatch interacts with the
 // Docker API.
 type Client interface {
@@ -221,12 +238,21 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 				log.Debugf("Container %s not found, skipping removal.", shortID)
 				return nil
 			}
-			return err
+			if !cerrdefs.IsConflict(err) {
+				return err
+			}
+			// The daemon is already removing this container, which is what we asked
+			// for. Treating that as a failed stop would make the caller skip the
+			// recreate for a container that is about to disappear.
+			log.Debugf("Removal of container %s already in progress, waiting for it.", shortID)
 		}
+	}
 
-		if err := client.waitForContainerRemoval(c, timeout); err != nil {
-			return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
-		}
+	// The daemon removes the container asynchronously in both cases -- on our
+	// request above, or on its own for AutoRemove containers. Recreating before
+	// that finishes fails with a 409 name conflict, so wait for it either way.
+	if err := client.waitForContainerRemoval(c, removalTimeout(timeout)); err != nil {
+		return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
 	}
 
 	return nil

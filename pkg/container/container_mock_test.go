@@ -42,6 +42,12 @@ func WithPortBindings(portBindingSources ...string) MockContainerUpdate {
 	}
 }
 
+func WithAutoRemove(autoRemove bool) MockContainerUpdate {
+	return func(c *dockerContainer.InspectResponse, i *dockerImage.InspectResponse) {
+		c.HostConfig.AutoRemove = autoRemove
+	}
+}
+
 func WithImageName(name string) MockContainerUpdate {
 	return func(c *dockerContainer.InspectResponse, i *dockerImage.InspectResponse) {
 		c.Config.Image = name
