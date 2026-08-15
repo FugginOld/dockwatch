@@ -215,6 +215,32 @@ func TestFilterByImage(t *testing.T) {
 
 }
 
+// Splitting on the first colon treats the registry port as the tag separator, so
+// every image on a ported registry is truncated to the bare hostname: the filter
+// then never matches the image the operator named, and the truncated value can
+// collide with an unrelated image that happens to be called "registry.local".
+func TestFilterByImageWithARegistryPort(t *testing.T) {
+	filter := FilterByImage([]string{"registry.local:5000/team/app"}, NoFilter)
+
+	container := new(mocks.FilterableContainer)
+	container.On("ImageName").Return("registry.local:5000/team/app:1.2")
+	assert.True(t, filter(container), "an image on a ported registry should match")
+	container.AssertExpectations(t)
+
+	// The bare hostname must not stand in for everything hosted on it.
+	other := new(mocks.FilterableContainer)
+	other.On("ImageName").Return("registry.local:5000/other/app:1.2")
+	assert.False(t, filter(other), "a different repo on the same registry must not match")
+	other.AssertExpectations(t)
+
+	// A digest-pinned ref carries a colon inside the digest, so the tag cannot be
+	// found by scanning for a colon alone.
+	digest := new(mocks.FilterableContainer)
+	digest.On("ImageName").Return("registry.local:5000/team/app@sha256:abc123")
+	assert.True(t, filter(digest), "a digest-pinned image should match its repo")
+	digest.AssertExpectations(t)
+}
+
 func TestBuildFilter(t *testing.T) {
 	names := []string{"test", "valid"}
 

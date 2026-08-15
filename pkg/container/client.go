@@ -359,7 +359,13 @@ func (client dockerClient) IsContainerStale(container t.Container, params t.Upda
 }
 
 func (client dockerClient) HasNewImage(ctx context.Context, container t.Container) (hasNew bool, latestImage t.ImageID, err error) {
-	currentImageID := t.ImageID(container.ContainerInfo().ContainerJSONBase.Image)
+	// Same class as the label readers: a scan calls this for every container, so a
+	// container the daemon returned without info panics the whole scan rather than
+	// failing just that container.
+	var currentImageID t.ImageID
+	if info := container.ContainerInfo(); info != nil && info.ContainerJSONBase != nil {
+		currentImageID = t.ImageID(info.Image)
+	}
 	imageName := container.ImageName()
 
 	newImageInfo, err := client.api.ImageInspect(ctx, imageName)

@@ -67,6 +67,24 @@ func getLinkedTestData(withImageInfo bool) *TestData {
 }
 
 var _ = Describe("the update action", func() {
+	// Whether a container may be started again is a fact about that container, not
+	// about its image. Tracking it per image means one container sharing an image
+	// with another decides the outcome for both -- and the container that failed to
+	// stop is the one dockwatch must leave alone, since it is still running the
+	// config it was refused permission to replace.
+	When("one of two containers sharing an image cannot be stopped", func() {
+		It("should not start the container it failed to stop", func() {
+			testData := getCommonTestData("test-container-01")
+			client := CreateMockClient(testData, false, false)
+
+			_, err := actions.Update(client, types.UpdateParams{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(testData.StartedContainers).NotTo(ContainElement("test-container-01"),
+				"a container that could not be stopped must not be started")
+		})
+	})
+
 	When("dockwatch has been instructed to clean up", func() {
 		When("there are multiple containers using the same image", func() {
 			It("should only try to remove the image once", func() {

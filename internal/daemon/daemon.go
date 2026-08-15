@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -123,8 +124,11 @@ func (d *Daemon) Run(opts Options) error {
 		httpAPI.RegisterHandler("/v1/metrics", promhttp.Handler())
 	}
 
+	// An API the operator explicitly enabled and that could not start is fatal.
+	// Logging and carrying on left dockwatch scanning with no update endpoint and
+	// still exiting 0, so an orchestrator saw a healthy container either way.
 	if err := httpAPI.Start(m.apiShouldBlock); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("failed to start API", err)
+		return fmt.Errorf("failed to start HTTP API: %w", err)
 	}
 
 	if opts.Interactive {

@@ -105,7 +105,7 @@ func (c Container) SafeImageID() wt.ImageID {
 func (c Container) ImageName() string {
 	// Compatibility w/ Zodiac deployments
 	imageName, ok := c.getLabelValue(zodiacLabel)
-	if !ok {
+	if !ok && c.containerInfo != nil && c.containerInfo.Config != nil {
 		imageName = c.containerInfo.Config.Image
 	}
 
@@ -217,7 +217,7 @@ func (c Container) ToRestart() bool {
 // identified by the presence of the "com.centurylinklabs.dockwatch" label in
 // the container metadata.
 func (c Container) IsDockwatch() bool {
-	return ContainsDockwatchLabel(c.containerInfo.Config.Labels)
+	return ContainsDockwatchLabel(c.labels())
 }
 
 // PreUpdateTimeout checks whether a container has a specific timeout set

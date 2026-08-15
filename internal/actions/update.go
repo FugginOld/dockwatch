@@ -88,10 +88,10 @@ func Update(client container.Client, params types.UpdateParams) (types.Report, e
 		separateLifecycleSkips(&progress, failed)
 		progress.UpdateFailed(failed)
 	} else {
-		failedStop, stoppedImages := stopContainersInReversedOrder(containersToUpdate, client, params)
+		failedStop, stoppedContainers := stopContainersInReversedOrder(containersToUpdate, client, params)
 		separateLifecycleSkips(&progress, failedStop)
 		progress.UpdateFailed(failedStop)
-		failedStart := restartContainersInSortedOrder(containersToUpdate, client, params, stoppedImages)
+		failedStart := restartContainersInSortedOrder(containersToUpdate, client, params, stoppedContainers)
 		progress.UpdateFailed(failedStart)
 	}
 
@@ -127,15 +127,19 @@ func performRollingRestart(containers []types.Container, client container.Client
 	return failed
 }
 
-func stopContainersInReversedOrder(containers []types.Container, client container.Client, params types.UpdateParams) (failed map[types.ContainerID]error, stopped map[types.ImageID]bool) {
+// stopContainersInReversedOrder reports which containers were stopped, keyed by
+// container ID. Keying by image ID would let one container decide the outcome for
+// every other container sharing that image -- and SafeImageID is "" whenever the
+// image could not be inspected, so those all collide on a single key regardless of
+// which image they actually run.
+func stopContainersInReversedOrder(containers []types.Container, client container.Client, params types.UpdateParams) (failed map[types.ContainerID]error, stopped map[types.ContainerID]bool) {
 	failed = make(map[types.ContainerID]error, len(containers))
-	stopped = make(map[types.ImageID]bool, len(containers))
+	stopped = make(map[types.ContainerID]bool, len(containers))
 	for i := len(containers) - 1; i >= 0; i-- {
 		if err := stopStaleContainer(containers[i], client, params); err != nil {
 			failed[containers[i].ID()] = err
 		} else {
-			// NOTE: If a container is restarted due to a dependency this might be empty
-			stopped[containers[i].SafeImageID()] = true
+			stopped[containers[i].ID()] = true
 		}
 
 	}
@@ -179,7 +183,7 @@ func stopStaleContainer(container types.Container, client container.Client, para
 	return nil
 }
 
-func restartContainersInSortedOrder(containers []types.Container, client container.Client, params types.UpdateParams, stoppedImages map[types.ImageID]bool) map[types.ContainerID]error {
+func restartContainersInSortedOrder(containers []types.Container, client container.Client, params types.UpdateParams, stoppedContainers map[types.ContainerID]bool) map[types.ContainerID]error {
 	cleanupImageIDs := make(map[types.ImageID]bool, len(containers))
 	failed := make(map[types.ContainerID]error, len(containers))
 
@@ -187,7 +191,7 @@ func restartContainersInSortedOrder(containers []types.Container, client contain
 		if !c.ToRestart() {
 			continue
 		}
-		if stoppedImages[c.SafeImageID()] {
+		if stoppedContainers[c.ID()] {
 			if err := restartStaleContainer(c, client, params); err != nil {
 				failed[c.ID()] = err
 			} else if c.IsStale() {

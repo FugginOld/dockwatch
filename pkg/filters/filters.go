@@ -101,6 +101,21 @@ func FilterByScope(scope string, baseFilter t.Filter) t.Filter {
 	}
 }
 
+// repoOf strips the tag and digest from an image reference, leaving the repository.
+//
+// A colon is not enough to find the tag: "registry.local:5000/team/app:1.2" carries
+// one in the registry port, and a digest carries one in "@sha256:...". Only a colon
+// after the last slash can be a tag separator.
+func repoOf(imageName string) string {
+	repo, _, _ := strings.Cut(imageName, "@")
+
+	lastSlash := strings.LastIndex(repo, "/")
+	if colon := strings.LastIndex(repo, ":"); colon > lastSlash {
+		repo = repo[:colon]
+	}
+	return repo
+}
+
 // FilterByImage returns all containers that have a specific image
 func FilterByImage(images []string, baseFilter t.Filter) t.Filter {
 	if images == nil {
@@ -108,7 +123,7 @@ func FilterByImage(images []string, baseFilter t.Filter) t.Filter {
 	}
 
 	return func(c t.FilterableContainer) bool {
-		image := strings.Split(c.ImageName(), ":")[0]
+		image := repoOf(c.ImageName())
 		for _, targetImage := range images {
 			if image == targetImage {
 				return baseFilter(c)

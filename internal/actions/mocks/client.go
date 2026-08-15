@@ -24,6 +24,10 @@ type TestData struct {
 	// StalenessError maps a container name to the error its staleness check should
 	// return, for exercising the paths where dockwatch cannot determine staleness.
 	StalenessError map[string]error
+	// StartedContainers records the name of every container StartContainer was
+	// called for, so a test can assert that a container dockwatch failed to stop
+	// was not started again.
+	StartedContainers []string
 }
 
 // TriedToRemoveImage is a test helper function to check whether RemoveImageByID has been called
@@ -58,8 +62,9 @@ func (client MockClient) StopContainer(c t.Container, _ time.Duration) error {
 	return nil
 }
 
-// StartContainer is a mock method
-func (client MockClient) StartContainer(_ t.Container) (t.ContainerID, error) {
+// StartContainer is a mock method that records which containers were started
+func (client MockClient) StartContainer(c t.Container) (t.ContainerID, error) {
+	client.TestData.StartedContainers = append(client.TestData.StartedContainers, c.Name())
 	return "", nil
 }
 
