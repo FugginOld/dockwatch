@@ -1,7 +1,11 @@
 package auth_test
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
@@ -58,7 +62,7 @@ var _ = Describe("the auth module", func() {
 		It("should parse the token from the response",
 			SkipIfCredentialsEmpty(GHCRCredentials, func() {
 				creds := fmt.Sprintf("%s:%s", GHCRCredentials.Username, GHCRCredentials.Password)
-				token, err := auth.GetToken(mockContainer, creds)
+				token, err := auth.GetToken(context.Background(), mockContainer, creds)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(token).NotTo(Equal(""))
 			}),
@@ -196,4 +200,93 @@ func getScopeFromImageAuthURL(imageName string) string {
 	scope := URL.Query().Get("scope")
 	Expect(scopeImageRegexp.Match(scope)).To(BeTrue())
 	return strings.Replace(scope[11:], ":pull", "", 1)
+}
+
+// A 401 from the token endpoint unmarshals cleanly into an empty TokenResponse, so
+// without a status check the function returned the literal "Bearer " as a success.
+// The empty token was not caught downstream either, so the real auth rejection was
+// swallowed and resurfaced as a confusing 401 on the digest request.
+func TestBearerFromResponse(t *testing.T) {
+	newRes := func(status int, body string) *http.Response {
+		rec := httptest.NewRecorder()
+		rec.Code = status
+		rec.Body = bytes.NewBufferString(body)
+		return rec.Result()
+	}
+
+	// Token-shaped body on purpose: an empty body would be caught by the
+	// empty-token guard below, leaving the status check itself unexercised.
+	if _, err := auth.BearerFromResponseForTest(newRes(401, `{"token":"abc"}`)); err == nil {
+		t.Error("a 401 from the token endpoint must be an error, not an empty bearer")
+	}
+
+	if _, err := auth.BearerFromResponseForTest(newRes(200, `{}`)); err == nil {
+		t.Error("a 200 carrying no token must be an error, not \"Bearer \"")
+	}
+
+	got, err := auth.BearerFromResponseForTest(newRes(200, `{"token":"abc"}`))
+	if err != nil || got != "Bearer abc" {
+		t.Errorf("token: got %q, %v", got, err)
+	}
+
+	// Azure ACR and some GitLab configurations return only access_token. Reading
+	// just "token" left the bearer empty and sent every poll down the full-pull path.
+	got, err = auth.BearerFromResponseForTest(newRes(200, `{"access_token":"xyz"}`))
+	if err != nil || got != "Bearer xyz" {
+		t.Errorf("access_token: got %q, %v", got, err)
+	}
+}
+
+// Only the scheme and the parameter keys are case-insensitive. Lowercasing the whole
+// challenge corrupted case-sensitive Artifactory realms and services, and the token
+// request 404'd -- visible only as a full pull every cycle.
+func TestGetAuthURLPreservesValueCase(t *testing.T) {
+	imageRef, err := ref.ParseNormalizedNamed("fugginold/dockwatch")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	challenge := `Bearer realm="https://art.example.com/v2/token",service="docker-Local"`
+	URL, err := auth.GetAuthURL(challenge, imageRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := URL.Query().Get("service"); got != "docker-Local" {
+		t.Errorf("service case was corrupted: got %q, want %q", got, "docker-Local")
+	}
+	if !strings.Contains(URL.Path, "/v2/token") {
+		t.Errorf("realm path was corrupted: got %q", URL.Path)
+	}
+}
+
+// A registry that serves /v2/ without a challenge allows anonymous reads. Treating
+// that as an unsupported challenge type failed the digest check outright, so every
+// poll fell back to pulling the whole image.
+func TestTokenForChallenge(t *testing.T) {
+	imageRef, err := ref.ParseNormalizedNamed("myreg.example.com/team/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	token, err := auth.TokenForChallengeForTest(ctx, "", 200, imageRef, "")
+	if err != nil {
+		t.Errorf("a registry that issues no challenge should be usable anonymously: %v", err)
+	}
+	if token != "" {
+		t.Errorf("anonymous access should carry no token, got %q", token)
+	}
+
+	// A missing header on a non-2xx is not consent to go anonymous.
+	if _, err := auth.TokenForChallengeForTest(ctx, "", 500, imageRef, ""); err == nil {
+		t.Error("a 500 with no challenge must not be treated as anonymous access")
+	}
+
+	if _, err := auth.TokenForChallengeForTest(ctx, "Basic realm=\"x\"", 401, imageRef, ""); err == nil {
+		t.Error("a basic challenge with no credentials must error")
+	}
+	if got, err := auth.TokenForChallengeForTest(ctx, "Basic realm=\"x\"", 401, imageRef, "creds"); err != nil || got != "Basic creds" {
+		t.Errorf("basic challenge: got %q, %v", got, err)
+	}
 }

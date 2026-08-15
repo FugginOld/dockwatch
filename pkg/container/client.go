@@ -410,7 +410,7 @@ func (client dockerClient) PullImage(ctx context.Context, container t.Container)
 
 	log.WithFields(fields).Debugf("Checking if pull is needed")
 
-	if match, err := digest.CompareDigest(container, opts.RegistryAuth); err != nil {
+	if match, err := digest.CompareDigest(ctx, container, opts.RegistryAuth); err != nil {
 		headLevel := log.DebugLevel
 		if client.WarnOnHeadPullFailed(container) {
 			headLevel = log.WarnLevel
@@ -536,6 +536,11 @@ func (client dockerClient) ExecuteCommand(containerID t.ContainerID, command str
 	})
 	if attachErr != nil {
 		clog.Errorf("Failed to extract command exec logs: %v", attachErr)
+	} else {
+		// Close here rather than at the point of use: the ExecStart below returns
+		// early on failure, and a hijacked connection closed by nobody is a leaked
+		// fd every time that happens, in a process designed to run for months.
+		defer response.Close()
 	}
 
 	// Run the exec
@@ -547,7 +552,6 @@ func (client dockerClient) ExecuteCommand(containerID t.ContainerID, command str
 
 	var output string
 	if attachErr == nil {
-		defer response.Close()
 		var writer bytes.Buffer
 		written, err := writer.ReadFrom(response.Reader)
 		if err != nil {

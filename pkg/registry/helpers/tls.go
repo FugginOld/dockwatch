@@ -59,11 +59,19 @@ func NewHTTPClient() *http.Client {
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
+			// The dial timeout above stops at connect. A registry that completes the
+			// handshake and then never sends a response line would otherwise park the
+			// update goroutine forever.
+			ResponseHeaderTimeout: 30 * time.Second,
 			TLSClientConfig:       &tls.Config{InsecureSkipVerify: skipTLSVerify}, //nolint:gosec // controlled by explicit env var
 		}
 
 		registryClient = &http.Client{
 			Transport: tr,
+			// Whole-request ceiling, covering a slow body as well as slow headers.
+			// Generous enough for a manifest HEAD or a token fetch, which is all this
+			// client is used for -- image layers go through the docker daemon.
+			Timeout: 60 * time.Second,
 			// net/http strips the Authorization header when a redirect crosses to a
 			// different host, but it compares hosts only, not schemes. A registry that
 			// redirects https -> http on the same host would therefore be handed the

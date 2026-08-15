@@ -60,3 +60,46 @@ func TestRunnerSingleFlight(t *testing.T) {
 		t.Fatal("TryRun skipped even though the guard was free")
 	}
 }
+
+// A targeted update from the HTTP API waits for the guard, and nothing bounded how
+// many callers could be waiting: each one is a parked goroutine holding a
+// connection, and every one of them still runs a full scan in turn, long after the
+// caller gave up. An orchestrator retrying a slow update is enough to build the
+// queue. Once the queue is full, Run must return rather than park.
+func TestRunnerRejectsScansOnceTheQueueIsFull(t *testing.T) {
+	client := &blockingClient{
+		entered: make(chan struct{}, 1),
+		release: make(chan struct{}),
+	}
+	r := NewRunner(Config{Client: client})
+
+	go r.Run(filters.NoFilter) // holds the guard, blocked in ListContainers
+	<-client.entered
+
+	// Fill every queue slot with a caller parked on the guard.
+	for i := 0; i < maxQueuedScans; i++ {
+		go r.Run(filters.NoFilter)
+	}
+	for deadline := time.Now().Add(5 * time.Second); len(r.queue) < maxQueuedScans; {
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d of %d queue slots filled", len(r.queue), maxQueuedScans)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// The next caller must be turned away, not added to the pile.
+	returned := make(chan struct{})
+	go func() {
+		r.Run(filters.NoFilter)
+		close(returned)
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run parked instead of rejecting; the queue is unbounded")
+	}
+
+	close(client.release)
+	r.Wait()
+}

@@ -1,6 +1,7 @@
 package digest
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,7 +21,7 @@ import (
 const ContentDigestHeader = "Docker-Content-Digest"
 
 // CompareDigest ...
-func CompareDigest(container types.Container, registryAuth string) (bool, error) {
+func CompareDigest(ctx context.Context, container types.Container, registryAuth string) (bool, error) {
 	if !container.HasImageInfo() {
 		return false, errors.New("container image info missing")
 	}
@@ -28,7 +29,7 @@ func CompareDigest(container types.Container, registryAuth string) (bool, error)
 	var digest string
 
 	registryAuth = TransformAuth(registryAuth)
-	token, err := auth.GetToken(container, registryAuth)
+	token, err := auth.GetToken(ctx, container, registryAuth)
 	if err != nil {
 		return false, err
 	}
@@ -38,7 +39,7 @@ func CompareDigest(container types.Container, registryAuth string) (bool, error)
 		return false, err
 	}
 
-	if digest, err = GetDigest(digestURL, token); err != nil {
+	if digest, err = GetDigest(ctx, digestURL, token); err != nil {
 		return false, err
 	}
 
@@ -85,23 +86,23 @@ func TransformAuth(registryAuth string) string {
 }
 
 // GetDigest from registry using a HEAD request to prevent rate limiting
-func GetDigest(url string, token string) (string, error) {
+func GetDigest(ctx context.Context, url string, token string) (string, error) {
 	client := helpers.NewHTTPClient()
 
-	req, err := http.NewRequest("HEAD", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("User-Agent", meta.UserAgent)
 
-	if token == "" {
-		return "", errors.New("could not fetch token")
+	// An empty token is legitimate for a registry that serves reads anonymously;
+	// GetToken only returns one when the registry issued no challenge at all.
+	if token != "" {
+		// CREDENTIAL: Uncomment to log the request token
+		// logrus.WithField("token", token).Trace("Setting request token")
+		req.Header.Add("Authorization", token)
 	}
 
-	// CREDENTIAL: Uncomment to log the request token
-	// logrus.WithField("token", token).Trace("Setting request token")
-
-	req.Header.Add("Authorization", token)
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v1+json")
@@ -122,5 +123,14 @@ func GetDigest(url string, token string) (string, error) {
 		}
 		return "", fmt.Errorf("registry responded to head request with %q, auth: %q", res.Status, wwwAuthHeader)
 	}
-	return res.Header.Get(ContentDigestHeader), nil
+
+	// Artifactory and nginx-fronted registries sometimes strip this header on HEAD.
+	// Returning "" as a valid digest made the comparison never match, so every poll
+	// pulled the whole image -- the exact rate-limit consumption the HEAD exists to
+	// avoid -- and logged nothing, because that is the normal "digests differ" path.
+	remoteDigest := res.Header.Get(ContentDigestHeader)
+	if remoteDigest == "" {
+		return "", fmt.Errorf("registry did not return a %s header", ContentDigestHeader)
+	}
+	return remoteDigest, nil
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -100,3 +101,21 @@ var _ = Describe("the registry HTTP client", func() {
 		Expect(client.CheckRedirect(&http.Request{URL: to}, via)).To(Succeed())
 	})
 })
+
+// The dial timeout stops at connect. Without these, a registry that completes the
+// handshake and then never answers parks the update goroutine for good.
+func TestHTTPClientHasRequestTimeouts(t *testing.T) {
+	client := NewHTTPClient()
+
+	if client.Timeout == 0 {
+		t.Error("registry client has no overall request timeout")
+	}
+
+	tr, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("unexpected transport type %T", client.Transport)
+	}
+	if tr.ResponseHeaderTimeout == 0 {
+		t.Error("transport has no ResponseHeaderTimeout; a silent registry parks the scan forever")
+	}
+}
