@@ -8,6 +8,16 @@ import (
 )
 
 var _ = Describe("Registry credential helpers", func() {
+	// These specs set the credential variables on the real process environment, so
+	// without this they leak into whatever spec runs next -- which is how
+	// "no environment credentials are set" went red under -ginkgo.randomizeAllSpecs.
+	AfterEach(func() {
+		_ = os.Unsetenv("REPO_USER")
+		_ = os.Unsetenv("REPO_PASS")
+		_ = os.Unsetenv("REPO_HOST")
+		_ = os.Unsetenv("DOCKER_CONFIG")
+	})
+
 	Describe("EncodedAuth", func() {
 		It("should return repo credentials from env when set", func() {
 			var err error
@@ -43,7 +53,6 @@ var _ = Describe("Registry credential helpers", func() {
 				_ = os.Setenv("REPO_USER", "containrrr-user")
 				_ = os.Setenv("REPO_PASS", "containrrr-pass")
 				_ = os.Setenv("REPO_HOST", "harbor.example.com")
-				defer func() { _ = os.Unsetenv("REPO_HOST") }()
 
 				_, err := EncodedEnvAuth("evil.example.com/tool:latest")
 				Expect(err).To(HaveOccurred())
@@ -55,7 +64,6 @@ var _ = Describe("Registry credential helpers", func() {
 				_ = os.Setenv("REPO_USER", "containrrr-user")
 				_ = os.Setenv("REPO_PASS", "containrrr-pass")
 				_ = os.Setenv("REPO_HOST", "harbor.example.com")
-				defer func() { _ = os.Unsetenv("REPO_HOST") }()
 
 				config, err := EncodedEnvAuth("harbor.example.com/team/tool:latest")
 				Expect(err).NotTo(HaveOccurred())
@@ -71,7 +79,6 @@ var _ = Describe("Registry credential helpers", func() {
 			It("should still match the image registry", func() {
 				_ = os.Setenv("REPO_USER", "containrrr-user")
 				_ = os.Setenv("REPO_PASS", "containrrr-pass")
-				defer func() { _ = os.Unsetenv("REPO_HOST") }()
 
 				for _, repoHost := range []string{
 					"docker.io",
@@ -88,6 +95,14 @@ var _ = Describe("Registry credential helpers", func() {
 				config, err := EncodedEnvAuth("harbor.example.com/team/tool:latest")
 				Expect(err).NotTo(HaveOccurred(), "host comparison should be case-insensitive")
 				Expect(config).NotTo(BeEmpty())
+
+				// The alias can just as easily arrive on the image side, which is what
+				// a ref copied out of a pull trace looks like. Normalizing only the
+				// REPO_HOST side would withhold the credentials here.
+				_ = os.Setenv("REPO_HOST", "docker.io")
+				config, err = EncodedEnvAuth("registry-1.docker.io/library/nginx:latest")
+				Expect(err).NotTo(HaveOccurred(), "both sides of the comparison must be normalized")
+				Expect(config).NotTo(BeEmpty())
 			})
 		})
 	})
@@ -100,8 +115,6 @@ var _ = Describe("Registry credential helpers", func() {
 			_ = os.Setenv("REPO_USER", "containrrr-user")
 			_ = os.Setenv("REPO_PASS", "containrrr-pass")
 			_ = os.Setenv("REPO_HOST", "harbor.example.com")
-			_ = os.Unsetenv("DOCKER_CONFIG")
-			defer func() { _ = os.Unsetenv("REPO_HOST") }()
 
 			envCreds, err := EncodedEnvAuth("harbor.example.com/team/tool:latest")
 			Expect(err).NotTo(HaveOccurred())

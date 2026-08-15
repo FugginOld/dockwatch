@@ -107,8 +107,14 @@ func TestIsFileRejectsValuesThatCannotBeStatted(t *testing.T) {
 	// Longer than any single path component: ENAMETOOLONG on Linux, ERROR_INVALID_NAME
 	// on Windows. Neither is ErrNotExist.
 	assert.False(t, isFile(strings.Repeat("a", 300)), "an over-long token is not a file")
+}
 
-	assert.False(t, isFile(os.TempDir()), "a directory is not a file")
+// A directory where a secret file was expected -- what `-v /host/missing:/run/secrets/token`
+// and a subPath-less k8s secret mount both produce -- must stay a path, so the read
+// fails loudly. Classifying it "not a file" leaves the flag holding the literal path
+// and the HTTP API ends up guarded by "/run/secrets/token" with nothing logged.
+func TestIsFileTreatsADirectoryAsAPath(t *testing.T) {
+	assert.True(t, isFile(t.TempDir()), "a directory is a path, so the read fails loudly")
 }
 
 // Requiring a successful stat would classify an unreadable secret file as "not a

@@ -8,10 +8,14 @@ import (
 
 // domains for Docker Hub, the default registry
 const (
-	DefaultRegistryDomain       = "docker.io"
-	DefaultRegistryHost         = "index.docker.io"
-	LegacyDefaultRegistryDomain = "index.docker.io"
+	DefaultRegistryDomain = "docker.io"
+	DefaultRegistryHost   = "index.docker.io"
 )
+
+// hubAliases are the spellings of Docker Hub an operator may write REPO_HOST as.
+// registry-1.docker.io is the host Hub serves the v2 API from, so it is what shows
+// up in registry docs and in anything copied out of a pull trace.
+var hubAliases = []string{DefaultRegistryDomain, DefaultRegistryHost, "registry-1.docker.io"}
 
 // GetRegistryAddress parses an image name
 // and returns the address of the specified registry
@@ -43,8 +47,10 @@ func NormalizeRegistryHost(host string) string {
 	}
 	host, _, _ = strings.Cut(host, "/")
 
-	if strings.EqualFold(host, DefaultRegistryDomain) || strings.EqualFold(host, LegacyDefaultRegistryDomain) {
-		return DefaultRegistryHost
+	for _, alias := range hubAliases {
+		if strings.EqualFold(host, alias) {
+			return DefaultRegistryHost
+		}
 	}
 	return host
 }

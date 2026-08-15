@@ -64,7 +64,7 @@ func EncodedEnvAuth(imageRef string) (string, error) {
 		// Compare normalized: an operator reaches for "docker.io" or the
 		// "https://index.docker.io/v1/" key from config.json long before the
 		// normalized address, and rejecting those reads as a broken credential.
-		if !strings.EqualFold(server, helpers.NormalizeRegistryHost(repoHost)) {
+		if !strings.EqualFold(helpers.NormalizeRegistryHost(server), helpers.NormalizeRegistryHost(repoHost)) {
 			log.WithFields(log.Fields{"registry": server, "repo_host": repoHost}).
 				Debug("Environment credentials are scoped to another registry, not using them")
 			return "", errors.New("environment credentials are scoped to a different registry")

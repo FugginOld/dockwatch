@@ -410,6 +410,13 @@ func getSecretFromFile(flags *pflag.FlagSet, secret string) error {
 					}
 					values = append(values, line)
 				}
+				// A read that fails part-way -- a directory, or an unreadable file --
+				// otherwise leaves an empty slice behind and the secret silently
+				// becomes "no value" instead of a fatal startup error.
+				if err := scanner.Err(); err != nil {
+					_ = file.Close()
+					return err
+				}
 				if err := file.Close(); err != nil {
 					return err
 				}
@@ -450,10 +457,13 @@ func isFile(s string) bool {
 // secret into the logs. But a path we merely cannot stat, typically because the
 // file or a parent directory is not readable by this user, is still a path: saying
 // otherwise would leave the flag holding the path string and use that as the
-// secret, so an unreadable token file would silently become a guessable one.
+// secret, so an unreadable token file would silently become a guessable one. The
+// same applies to a directory -- what a missing bind-mount source or a subPath-less
+// secret volume leaves behind: it must stay a path so the read fails loudly rather
+// than the flag keeping the path string. The read error names only the path.
 func isFileStat(info os.FileInfo, err error) bool {
 	if err == nil {
-		return info != nil && !info.IsDir()
+		return info != nil
 	}
 	return errors.Is(err, os.ErrPermission)
 }
