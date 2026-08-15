@@ -357,3 +357,29 @@ func TestBuildFilterDisableContainer(t *testing.T) {
 	assert.False(t, filter(container))
 	container.AssertExpectations(t)
 }
+
+// Name() returns the daemon's container name unguarded, and both filters sliced [1:]
+// to drop the leading "/". A container the daemon reports with an empty name -- a
+// torn-down container, or a non-conformant API like a socket proxy -- panicked the
+// whole scan rather than failing that one container.
+func TestFilterByNameWithAnEmptyContainerName(t *testing.T) {
+	container := new(mocks.FilterableContainer)
+	container.On("Name").Return("")
+
+	filter := FilterByNames([]string{"anything"}, NoFilter)
+	assert.NotPanics(t, func() { filter(container) })
+
+	disabled := new(mocks.FilterableContainer)
+	disabled.On("Name").Return("")
+	disableFilter := FilterByDisableNames([]string{"anything"}, NoFilter)
+	assert.NotPanics(t, func() { disableFilter(disabled) })
+}
+
+// The scope-none branch ended its fragment with a stray quote instead of the ", "
+// separator every other branch uses, so the trailing-separator trim cut the wrong
+// two characters and the startup banner reported a dangling comma.
+func TestBuildFilterDescriptionForScopeNone(t *testing.T) {
+	_, desc := BuildFilter(nil, nil, false, "none")
+
+	assert.Equal(t, "Only checking containers without a scope", desc)
+}

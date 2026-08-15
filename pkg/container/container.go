@@ -33,6 +33,9 @@ type Container struct {
 
 	containerInfo *dockercontainer.InspectResponse
 	imageInfo     *dockerimage.InspectResponse
+	// imageInfoErr records why imageInfo is nil, so the eventual "no image info"
+	// error can name the inspect failure that caused it.
+	imageInfoErr error
 }
 
 // IsLinkedToRestarting returns the current value of the linkedToRestarting field for the container
@@ -354,8 +357,19 @@ func (c Container) GetCreateHostConfig() *dockercontainer.HostConfig {
 	hostConfig := c.containerInfo.HostConfig
 
 	for i, link := range hostConfig.Links {
-		name := link[0:strings.Index(link, ":")]
-		alias := link[strings.LastIndex(link, "/"):]
+		// Both lookups have to be guarded, not just the first: "db:web" has no "/"
+		// and sliced with -1 just as readily. This runs inside StartContainer, after
+		// the old container has been stopped and removed, so a panic here does not
+		// fail a scan -- it loses the container.
+		sep := strings.Index(link, ":")
+		aliasStart := strings.LastIndex(link, "/")
+		if sep < 0 || aliasStart < 0 {
+			logrus.WithFields(logrus.Fields{"container": c.Name(), "link": link}).
+				Warn("Leaving a link in an unrecognised form untouched")
+			continue
+		}
+		name := link[0:sep]
+		alias := link[aliasStart:]
 
 		hostConfig.Links[i] = fmt.Sprintf("%s:%s", name, alias)
 	}
@@ -377,6 +391,9 @@ func (c Container) ImageInfo() *dockerimage.InspectResponse {
 // that the container can be recreated once deleted
 func (c Container) VerifyConfiguration() error {
 	if c.imageInfo == nil {
+		if c.imageInfoErr != nil {
+			return fmt.Errorf("%w: %w", errorNoImageInfo, c.imageInfoErr)
+		}
 		return errorNoImageInfo
 	}
 

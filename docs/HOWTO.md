@@ -219,9 +219,18 @@ Endpoints (all require `Authorization: Bearer <token>`):
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/update` | Run a full update scan (or a targeted one, see below) |
-| `GET` | `/v1/schedule` | Return the current cron spec and next run |
-| `POST` | `/v1/schedule?schedule=<cron>` | Set the schedule |
+| `GET` | `/v1/schedule` | Return the current cron spec and next run (needs a schedule, see note) |
+| `POST` | `/v1/schedule?schedule=<cron>` | Set the schedule (same) |
 | `GET` | `/v1/metrics` | Prometheus metrics (requires `--http-api-metrics`) |
+
+`/v1/update` answers `200` when a scan ran and `409` when none was started — because
+one was already running, or because too many were already queued. Any method other
+than `POST` gets `405`.
+
+**`/v1/schedule` only exists when there is a schedule to talk about.** `--http-api-update`
+turns periodic runs off, so unless you also pass `--http-api-periodic-polls` (or set
+`--schedule`), the endpoint is not registered and returns `404`. Dockwatch logs this at
+startup rather than leaving you to guess.
 
 ```bash
 # Full scan
@@ -361,7 +370,7 @@ with `-e` on `docker run`. Boolean flags accept `true`/`false`.
 | `--log-format` | `-l` | `DOCKWATCH_LOG_FORMAT` | `Auto` | `Auto`, `LogFmt`, `Pretty`, or `JSON` |
 | `--log-level` | | `DOCKWATCH_LOG_LEVEL` | `info` | `panic`…`trace` |
 | `--debug` | `-d` | `DOCKWATCH_DEBUG` | `false` | Verbose logging |
-| `--trace` | | `DOCKWATCH_TRACE` | `false` | Very verbose logging (exposes credentials) |
+| `--trace` | | `DOCKWATCH_TRACE` | `false` | Very verbose logging. Dumps container and image config including environment variables, so it can expose secrets from any watched container |
 | `--no-color` | | `NO_COLOR` | — | Disable ANSI colors |
 | `--no-startup-message` | | `DOCKWATCH_NO_STARTUP_MESSAGE` | `false` | Suppress the startup message |
 | `--porcelain` | `-P` | `DOCKWATCH_PORCELAIN` | — | Stable machine-readable output (`v1`) |

@@ -516,6 +516,12 @@ func ProcessFlagAliases(flags *pflag.FlagSet) {
 	// update schedule flag to match interval if it's set, or to the default if none of them are
 	if intervalChanged || !scheduleChanged {
 		interval, _ := flags.GetInt(`interval`)
+		// "@every 0s" is not rejected downstream -- cron clamps it up to one second --
+		// so a mistyped interval silently became a full scan of every container,
+		// against every registry, once a second, forever.
+		if interval <= 0 {
+			log.Fatalf(`Interval must be a positive number of seconds, got %d.`, interval)
+		}
 		_ = flags.Set(`schedule`, fmt.Sprintf(`@every %ds`, interval))
 	}
 

@@ -65,9 +65,24 @@ func CompareDigest(ctx context.Context, container types.Container, registryAuth 
 	return false, nil
 }
 
+// decodeAuth accepts either base64 alphabet.
+//
+// EncodeAuth writes with URLEncoding while this decoded with StdEncoding. The two
+// differ only in the last two characters, so the mismatch stayed invisible until a
+// credential happened to encode a byte as one of them -- and then the decode failed,
+// TransformAuth returned its input untouched, and the registry was handed a
+// base64-of-JSON blob where it expected user:pass. Accepting both means neither a
+// future producer nor a docker config written by another tool can reopen it.
+func decodeAuth(s string) ([]byte, error) {
+	if b, err := base64.URLEncoding.DecodeString(s); err == nil {
+		return b, nil
+	}
+	return base64.StdEncoding.DecodeString(s)
+}
+
 // TransformAuth from a base64 encoded json object to base64 encoded string
 func TransformAuth(registryAuth string) string {
-	b, err := base64.StdEncoding.DecodeString(registryAuth)
+	b, err := decodeAuth(registryAuth)
 	if err != nil {
 		return registryAuth
 	}
@@ -98,7 +113,8 @@ func GetDigest(ctx context.Context, url string, token string) (string, error) {
 	// An empty token is legitimate for a registry that serves reads anonymously;
 	// GetToken only returns one when the registry issued no challenge at all.
 	if token != "" {
-		// CREDENTIAL: Uncomment to log the request token
+		// CREDENTIAL: deliberately not logged. Uncommenting the line below writes a
+		// live secret to the log; do it only against a throwaway credential.
 		// logrus.WithField("token", token).Trace("Setting request token")
 		req.Header.Add("Authorization", token)
 	}

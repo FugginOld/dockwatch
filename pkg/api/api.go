@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"crypto/hmac"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -38,6 +40,9 @@ type API struct {
 	Addr        string
 	mux         *http.ServeMux
 	hasHandlers bool
+
+	mu     sync.Mutex
+	server *http.Server
 }
 
 // New is a factory function creating a new API instance
@@ -103,12 +108,17 @@ func (api *API) Start(block bool) error {
 
 	log.Warn("HTTP API is running without TLS. Ensure this endpoint is behind a TLS-terminating proxy in production.")
 
+	server := api.newServer()
+	api.mu.Lock()
+	api.server = server
+	api.mu.Unlock()
+
 	if block {
-		return api.serve(listener)
+		return api.serve(server, listener)
 	}
 
 	go func() {
-		if err := api.serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := api.serve(server, listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.WithError(err).Error("HTTP API stopped serving")
 		}
 	}()
@@ -124,6 +134,25 @@ func (api *API) newServer() *http.Server {
 	}
 }
 
-func (api *API) serve(listener net.Listener) error {
-	return api.newServer().Serve(listener)
+// serve takes the server rather than building it, so Start can publish it for
+// Shutdown before the serving goroutine exists.
+func (api *API) serve(server *http.Server, listener net.Listener) error {
+	return server.Serve(listener)
+}
+
+// Shutdown stops accepting requests and waits for in-flight ones to finish.
+//
+// Without this the process could exit while an API-triggered scan was still
+// running, or start one after the daemon had already waited for the last scan to
+// finish -- killing an update partway, which is the same shape of loss as an
+// interrupted stop-and-recreate.
+func (api *API) Shutdown(ctx context.Context) error {
+	api.mu.Lock()
+	server := api.server
+	api.mu.Unlock()
+
+	if server == nil {
+		return nil
+	}
+	return server.Shutdown(ctx)
 }

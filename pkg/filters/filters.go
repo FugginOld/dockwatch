@@ -21,7 +21,9 @@ func FilterByNames(names []string, baseFilter t.Filter) t.Filter {
 
 	return func(c t.FilterableContainer) bool {
 		for _, name := range names {
-			if name == c.Name() || name == c.Name()[1:] {
+			// TrimPrefix rather than [1:]: Name() is the daemon's value, unguarded, and
+			// an empty one panicked the whole scan instead of failing one container.
+			if name == c.Name() || name == strings.TrimPrefix(c.Name(), "/") {
 				return baseFilter(c)
 			}
 
@@ -49,7 +51,7 @@ func FilterByDisableNames(disableNames []string, baseFilter t.Filter) t.Filter {
 
 	return func(c t.FilterableContainer) bool {
 		for _, name := range disableNames {
-			if name == c.Name() || name == c.Name()[1:] {
+			if name == c.Name() || name == strings.TrimPrefix(c.Name(), "/") {
 				return false
 			}
 		}
@@ -173,7 +175,7 @@ func BuildFilter(names []string, disableNames []string, enableLabel bool, scope 
 		// If a scope has explicitly defined as "none", containers should only be considered
 		// if they do not have a scope defined, or if it's explicitly set to "none".
 		filter = FilterByScope(scope, filter)
-		sb.WriteString(`without a scope, "`)
+		sb.WriteString(`without a scope, `)
 	} else if scope != "" {
 		// If a scope has been defined, containers should only be considered
 		// if the scope is specifically set.

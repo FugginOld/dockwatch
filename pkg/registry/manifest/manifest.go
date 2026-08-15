@@ -5,9 +5,9 @@ import (
 	"fmt"
 	url2 "net/url"
 
+	ref "github.com/distribution/reference"
 	"github.com/fugginold/dockwatch/pkg/registry/helpers"
 	"github.com/fugginold/dockwatch/pkg/types"
-	ref "github.com/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,7 +22,12 @@ func BuildManifestURL(container types.Container) (string, error) {
 		return "", errors.New("Parsed container image ref has no tag: " + normalizedRef.String())
 	}
 
-	host, _ := helpers.GetRegistryAddress(normalizedTaggedRef.Name())
+	host, err := helpers.GetRegistryAddress(normalizedTaggedRef.Name())
+	if err != nil {
+		// Discarded, this left host empty and built "https:///v2/..." -- a URL that
+		// fails later with nothing pointing back at the parse.
+		return "", err
+	}
 	img, tag := ref.Path(normalizedTaggedRef), normalizedTaggedRef.Tag()
 
 	logrus.WithFields(logrus.Fields{
@@ -31,10 +36,6 @@ func BuildManifestURL(container types.Container) (string, error) {
 		"normalized": normalizedTaggedRef.Name(),
 		"host":       host,
 	}).Debug("Parsing image ref")
-
-	if err != nil {
-		return "", err
-	}
 
 	url := url2.URL{
 		Scheme: "https",

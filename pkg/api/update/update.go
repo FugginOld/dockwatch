@@ -11,7 +11,7 @@ import (
 // single-flight guard; when false the run is skipped if one is already
 // in progress. The guard itself lives in the Scanner, not this handler.
 type Scanner interface {
-	Scan(images []string, wait bool)
+	Scan(images []string, wait bool) (ran bool)
 }
 
 // New is a factory function creating a new Handler instance.
@@ -50,5 +50,18 @@ func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	handle.scanner.Scan(images, len(images) > 0)
+	// 200 was returned whether the scan ran or was dropped, so a caller could not
+	// tell a completed update from one skipped behind another scan or refused by a
+	// full queue.
+	if handle.scanner.Scan(images, len(images) > 0) {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	writeConflict(w)
+}
+
+func writeConflict(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	_, _ = w.Write([]byte("{\"error\":\"a scan is already running or the queue is full; no scan was started\"}\n"))
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	dockerTypes "github.com/docker/cli/cli/config/types"
 	"net/http"
 	"os"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/fugginold/dockwatch/internal/actions/mocks"
 	"github.com/fugginold/dockwatch/internal/meta"
+	trust "github.com/fugginold/dockwatch/pkg/registry"
 	"github.com/fugginold/dockwatch/pkg/registry/digest"
 	wtTypes "github.com/fugginold/dockwatch/pkg/types"
 	. "github.com/onsi/ginkgo"
@@ -189,3 +191,22 @@ var _ = Describe("Digests", func() {
 		})
 	})
 })
+
+// EncodeAuth writes with URLEncoding and TransformAuth read with StdEncoding. The two
+// alphabets differ only in the last two characters, so this stayed invisible until a
+// credential happened to encode a byte using one of them -- then the decode failed,
+// TransformAuth silently returned its input unchanged, and the registry got a
+// base64-of-JSON blob where it expected user:pass.
+func TestTransformAuthDecodesWhatEncodeAuthProduces(t *testing.T) {
+	encoded, err := trust.EncodeAuth(dockerTypes.AuthConfig{Username: "user", Password: "a?b?c?d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := digest.TransformAuth(encoded)
+
+	want := base64.StdEncoding.EncodeToString([]byte("user:a?b?c?d"))
+	if got != want {
+		t.Errorf("TransformAuth did not decode EncodeAuth's output\n got: %q\nwant: %q", got, want)
+	}
+}

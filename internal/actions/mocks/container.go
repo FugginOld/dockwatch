@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fugginold/dockwatch/pkg/container"
-	wt "github.com/fugginold/dockwatch/pkg/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
 	dockerImage "github.com/docker/docker/api/types/image"
 	"github.com/docker/go-connections/nat"
+	"github.com/fugginold/dockwatch/pkg/container"
+	wt "github.com/fugginold/dockwatch/pkg/types"
 )
 
 // CreateMockContainer creates a container substitute valid for testing

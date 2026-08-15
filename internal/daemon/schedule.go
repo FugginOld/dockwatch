@@ -42,12 +42,18 @@ func (c *Controller) Set(spec string) (time.Time, error) {
 		return time.Time{}, err
 	}
 
+	// No floor is enforced here: robfig/cron already clamps @every below one second
+	// up to one second, and no spec syntax it accepts can schedule faster than that.
 	nextRun := scheduler.Entries()[0].Schedule.Next(time.Now())
-	scheduler.Start()
 
+	// Stop the old one before starting the replacement. Started first, both were
+	// briefly live, and a scan firing in that window was silently dropped by the
+	// single-flight guard. Everything above this point can still fail, and must
+	// leave the running schedule untouched when it does.
 	if c.scheduler != nil {
 		c.scheduler.Stop()
 	}
+	scheduler.Start()
 
 	c.scheduler = scheduler
 	c.spec = spec

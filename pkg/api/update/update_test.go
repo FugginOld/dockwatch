@@ -14,12 +14,14 @@ type fakeScanner struct {
 	images []string
 	wait   bool
 	called bool
+	didRun bool
 }
 
-func (f *fakeScanner) Scan(images []string, wait bool) {
+func (f *fakeScanner) Scan(images []string, wait bool) bool {
 	f.called = true
 	f.images = images
 	f.wait = wait
+	return f.didRun
 }
 
 func TestUpdate(t *testing.T) {
@@ -29,7 +31,7 @@ func TestUpdate(t *testing.T) {
 
 var _ = Describe("the update API handler", func() {
 	It("should parse comma-separated image query values and wait", func() {
-		scanner := &fakeScanner{}
+		scanner := &fakeScanner{didRun: true}
 		handler := updateAPI.New(scanner)
 
 		rec := httptest.NewRecorder()
@@ -42,7 +44,7 @@ var _ = Describe("the update API handler", func() {
 	})
 
 	It("should scan with nil images and not wait when image query is absent", func() {
-		scanner := &fakeScanner{}
+		scanner := &fakeScanner{didRun: true}
 		handler := updateAPI.New(scanner)
 
 		rec := httptest.NewRecorder()
@@ -71,5 +73,18 @@ var _ = Describe("the update API handler", func() {
 			Expect(rec.Header().Get("Allow")).To(Equal(http.MethodPost), method)
 			Expect(scanner.called).To(BeFalse(), "%s must not trigger a scan", method)
 		}
+	})
+
+	// A dropped scan used to answer 200 identically to a completed one, so a caller
+	// could not tell an update that happened from one that silently did not.
+	It("should answer 409 when no scan was started", func() {
+		scanner := &fakeScanner{didRun: false}
+		handler := updateAPI.New(scanner)
+
+		rec := httptest.NewRecorder()
+		handler.Handle(rec, httptest.NewRequest(http.MethodPost, "/v1/update", nil))
+
+		Expect(rec.Code).To(Equal(http.StatusConflict))
+		Expect(rec.Header().Get("Content-Type")).To(Equal("application/json"))
 	})
 })

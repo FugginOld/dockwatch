@@ -25,6 +25,11 @@ import (
 
 const defaultStopSignal = "SIGTERM"
 
+// maxExecOutputBytes caps how much of a lifecycle hook's output is read into memory.
+// A hook that writes without bound should not be able to exhaust the daemon it is
+// supposed to be maintaining.
+const maxExecOutputBytes = 1 << 20
+
 // ErrRemovalUnconfirmed means the removal was accepted by the daemon but had not
 // finished within the budget. The container is very likely gone a moment later, so
 // treating this as a failed stop is what loses it for good: the caller skips the
@@ -218,8 +223,11 @@ func (client dockerClient) GetContainer(containerID t.ContainerID) (t.Container,
 
 	imageInfo, err := client.api.ImageInspect(bg, containerInfo.Image)
 	if err != nil {
+		// Kept on the container rather than only logged here: without it the failure
+		// resurfaces much later as a bare "no image info" with nothing pointing at
+		// the inspect that actually failed.
 		log.Warnf("Failed to retrieve container image info: %v", err)
-		return &Container{containerInfo: &containerInfo, imageInfo: nil}, nil
+		return &Container{containerInfo: &containerInfo, imageInfo: nil, imageInfoErr: err}, nil
 	}
 
 	return &Container{containerInfo: &containerInfo, imageInfo: &imageInfo}, nil
@@ -280,8 +288,14 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 }
 
 func (client dockerClient) GetNetworkConfig(c t.Container) *network.NetworkingConfig {
+	// VerifyConfiguration checks Config and HostConfig but not this one, and a
+	// container inspected without network settings panicked the recreate.
+	var endpoints map[string]*network.EndpointSettings
+	if info := c.ContainerInfo(); info != nil && info.NetworkSettings != nil {
+		endpoints = info.NetworkSettings.Networks
+	}
 	config := &network.NetworkingConfig{
-		EndpointsConfig: c.ContainerInfo().NetworkSettings.Networks,
+		EndpointsConfig: endpoints,
 	}
 
 	for _, ep := range config.EndpointsConfig {
@@ -572,7 +586,15 @@ func (client dockerClient) ExecuteCommand(containerID t.ContainerID, command str
 	var output string
 	if attachErr == nil {
 		var writer bytes.Buffer
-		written, err := writer.ReadFrom(response.Reader)
+		// Capped: a hook writing unbounded stdout was read entirely into memory.
+		// The remainder still has to be drained -- stopping at the cap leaves the
+		// hijacked connection's buffer full, the hook blocked in write(2), and the
+		// exec never finishing.
+		written, err := writer.ReadFrom(io.LimitReader(response.Reader, maxExecOutputBytes))
+		if written >= maxExecOutputBytes {
+			clog.Warnf("Command output exceeded %d bytes; truncating", maxExecOutputBytes)
+			_, _ = io.Copy(io.Discard, response.Reader)
+		}
 		if err != nil {
 			clog.Error(err)
 		} else if written > 0 {

@@ -7,11 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/fugginold/dockwatch/pkg/registry/helpers"
 	cliconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/config/configfile"
 	"github.com/docker/cli/cli/config/credentials"
 	"github.com/docker/cli/cli/config/types"
+	"github.com/fugginold/dockwatch/pkg/registry/helpers"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -77,7 +77,8 @@ func EncodedEnvAuth(imageRef string) (string, error) {
 	}
 
 	log.Debugf("Loaded auth credentials for registry user %s from environment", auth.Username)
-	// CREDENTIAL: Uncomment to log REPO_PASS environment variable
+	// CREDENTIAL: deliberately not logged. Uncommenting the line below writes a
+	// live secret to the log; do it only against a throwaway credential.
 	// log.Tracef("Using auth password %s", auth.Password)
 
 	return EncodeAuth(auth)
@@ -104,14 +105,21 @@ func EncodedConfigAuth(imageRef string) (string, error) {
 		return "", err
 	}
 	credStore := CredentialsStore(*configFile)
-	auth, _ := credStore.Get(server) // returns (types.AuthConfig{}) if server not in credStore
+	auth, err := credStore.Get(server) // returns (types.AuthConfig{}) if server not in credStore
+	if err != nil {
+		// Discarded, a credential helper that is missing, broken or refusing to
+		// unlock was indistinguishable from "this registry has no credentials".
+		log.WithError(err).WithField("registry", server).
+			Warn("Credential store returned an error; continuing without its credentials")
+	}
 
 	if auth == (types.AuthConfig{}) {
 		log.WithField("config_file", configFile.Filename).Debugf("No credentials for %s found", server)
 		return "", nil
 	}
 	log.Debugf("Loaded auth credentials for user %s, on registry %s, from file %s", auth.Username, server, configFile.Filename)
-	// CREDENTIAL: Uncomment to log docker config password
+	// CREDENTIAL: deliberately not logged. Uncommenting the line below writes a
+	// live secret to the log; do it only against a throwaway credential.
 	// log.Tracef("Using auth password %s", auth.Password)
 	return EncodeAuth(auth)
 }

@@ -22,7 +22,8 @@ func GetPullOptions(imageName string) (image.PullOptions, error) {
 		return image.PullOptions{}, nil
 	}
 
-	// CREDENTIAL: Uncomment to log docker config auth
+	// CREDENTIAL: deliberately not logged. Uncommenting the line below writes a
+	// live secret to the log; do it only against a throwaway credential.
 	// log.Tracef("Got auth value: %s", auth)
 
 	return image.PullOptions{

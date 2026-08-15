@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"strings"
 
+	ref "github.com/distribution/reference"
 	"github.com/fugginold/dockwatch/pkg/registry/helpers"
 	"github.com/fugginold/dockwatch/pkg/types"
-	ref "github.com/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
 
@@ -106,7 +106,8 @@ func GetBearerHeader(ctx context.Context, challenge string, imageRef ref.Named, 
 
 	if registryAuth != "" {
 		logrus.Debug("Credentials found.")
-		// CREDENTIAL: Uncomment to log registry credentials
+		// CREDENTIAL: deliberately not logged. Uncommenting the line below writes a
+		// live secret to the log; do it only against a throwaway credential.
 		// logrus.Tracef("Credentials: %v", registryAuth)
 		r.Header.Add("Authorization", fmt.Sprintf("Basic %s", registryAuth))
 	} else {

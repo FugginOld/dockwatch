@@ -364,3 +364,25 @@ func TestProcessFlagAliasesInvalidPorcelaineVersion(t *testing.T) {
 		ProcessFlagAliases(flags)
 	})
 }
+
+// --interval 0 produced "@every 0s", which robfig/cron clamps up to one second --
+// so a typo silently became a full scan of every container every second, pulling
+// from every registry, forever.
+func TestProcessFlagAliasesRejectsANonPositiveInterval(t *testing.T) {
+	for _, interval := range []string{"0", "-5"} {
+		t.Run(interval, func(t *testing.T) {
+			fatal := false
+			logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
+			defer func() { logrus.StandardLogger().ExitFunc = nil }()
+
+			cmd := new(cobra.Command)
+			RegisterDockerFlags(cmd)
+			RegisterSystemFlags(cmd)
+			require.NoError(t, cmd.ParseFlags([]string{"--interval", interval}))
+
+			ProcessFlagAliases(cmd.PersistentFlags())
+
+			assert.True(t, fatal, "a non-positive interval must be rejected, not clamped to one second")
+		})
+	}
+}

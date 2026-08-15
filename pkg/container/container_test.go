@@ -427,3 +427,17 @@ var _ = Describe("the container", func() {
 
 	})
 })
+
+// GetCreateHostConfig runs inside StartContainer, after the old container has been
+// stopped and removed -- so a panic here does not fail a scan, it loses the
+// container. Both index lookups must be guarded, not just the first.
+var _ = Describe("rewriting container links", func() {
+	It("should not panic on a link missing either separator", func() {
+		for _, link := range []string{"db:web", "nosep", "/parent/child:/parent/alias", ":", "/"} {
+			c := MockContainer(WithPortBindings())
+			c.containerInfo.HostConfig.Links = []string{link}
+
+			Expect(func() { c.GetCreateHostConfig() }).NotTo(Panic(), link)
+		}
+	})
+})

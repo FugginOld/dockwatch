@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	dockerImage "github.com/docker/docker/api/types/image"
 	"github.com/fugginold/dockwatch/internal/actions/mocks"
 	"github.com/fugginold/dockwatch/pkg/registry/manifest"
-	dockerImage "github.com/docker/docker/api/types/image"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
