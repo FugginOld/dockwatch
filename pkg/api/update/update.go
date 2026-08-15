@@ -31,7 +31,16 @@ type Handler struct {
 // Handle parses the requested images and delegates the guarded scan to the
 // Scanner. A targeted image update waits for the guard; a full scan is
 // skipped when one is already running.
-func (handle *Handler) Handle(_ http.ResponseWriter, r *http.Request) {
+func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
+	// POST is the documented interface, but every verb used to run a scan. That is
+	// more than untidiness: clients and intermediaries treat GET as safe to replay,
+	// so an auto-retried GET turns one timed-out request into repeated full scans.
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	log.Info("Updates triggered by HTTP API request.")
 
 	var images []string

@@ -25,6 +25,19 @@ import (
 
 const defaultStopSignal = "SIGTERM"
 
+// ErrRemovalUnconfirmed means the removal was accepted by the daemon but had not
+// finished within the budget. The container is very likely gone a moment later, so
+// treating this as a failed stop is what loses it for good: the caller skips the
+// recreate and the daemon completes the removal regardless.
+//
+// The recreate is safe to attempt on this: docker enforces name uniqueness, and
+// dockwatch recreates under the old name, so if the container really is still
+// there the create fails with a name conflict and nothing is destroyed. (It will
+// be stopped rather than running at that point -- the kill was already sent --
+// which is exactly where the old behaviour left it too.) A pending removal targets
+// the old container ID, so it cannot reach through and delete the new one.
+var ErrRemovalUnconfirmed = errors.New("container removal not confirmed within the timeout")
+
 // containerRemovalTimeout is the minimum time we allow the daemon to finish removing
 // a container. It is deliberately decoupled from the user's --stop-timeout: that
 // budget covers the graceful stop, and removal is a separate operation whose duration
@@ -33,7 +46,10 @@ const defaultStopSignal = "SIGTERM"
 // The costs are asymmetric. Waiting too long only slows an update cycle, while
 // giving up too early reports a failed stop for a container the daemon removes
 // moments later -- and the restart pass then skips it, so it is gone for good.
-const containerRemovalTimeout = 1 * time.Minute
+// A var rather than a const so a test can shrink it: the 60s floor otherwise makes
+// the timeout path untestable, and that path is load-bearing -- it is what tells
+// the caller to recreate instead of dropping the container.
+var containerRemovalTimeout = 1 * time.Minute
 
 // removalTimeout is the budget for confirming a removal. containerRemovalTimeout is a
 // floor rather than a fixed value, so a caller that deliberately asks for longer --
@@ -254,7 +270,10 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 	// request above, or on its own for AutoRemove containers. Recreating before
 	// that finishes fails with a 409 name conflict, so wait for it either way.
 	if err := client.waitForContainerRemoval(c, removalTimeout(timeout)); err != nil {
-		return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
+		// Running out of budget is not the same as the removal failing: the daemon
+		// took the request and finishes it on its own schedule. Keep that distinct
+		// so the caller can still recreate rather than dropping the container.
+		return fmt.Errorf("container %s (%s): %w", c.Name(), shortID, err)
 	}
 
 	return nil
@@ -652,6 +671,13 @@ func (client dockerClient) waitForContainerRemoval(c t.Container, waitTime time.
 			// Container already gone — that's the desired outcome
 			return nil
 		}
+		// Our own budget running out is reported here as whatever the SDK wrapped
+		// the cancellation in, so ask the context rather than trying to unwrap it.
+		if ctx.Err() != nil {
+			return ErrRemovalUnconfirmed
+		}
 		return err
+	case <-ctx.Done():
+		return ErrRemovalUnconfirmed
 	}
 }

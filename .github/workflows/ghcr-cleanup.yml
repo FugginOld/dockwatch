@@ -19,10 +19,16 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - uses: dataaxiom/ghcr-cleanup-action@v1
+      # Pinned to an immutable commit rather than the mutable @v1 tag: this step is
+      # handed a classic PAT that can delete any package on the account, so a
+      # compromised upstream release would be able to destroy the published image
+      # history. Delete this workflow and revoke the GHCR_PAT secret once the
+      # package has been pruned -- both, since removing the file leaves the
+      # credential live.
+      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1 as of v1.2.2
         with:
           package: dockwatch
-          exclude-tags: latest
+          exclude-tags: latest,main
           keep-n-tagged: 0
           delete-untagged: true
           delete-partial-images: true

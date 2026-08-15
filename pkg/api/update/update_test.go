@@ -1,6 +1,7 @@
 package update_test
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -32,7 +33,7 @@ var _ = Describe("the update API handler", func() {
 		handler := updateAPI.New(scanner)
 
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest("GET", "/v1/update?image=nginx,redis&image=alpine", nil)
+		req := httptest.NewRequest(http.MethodPost, "/v1/update?image=nginx,redis&image=alpine", nil)
 
 		handler.Handle(rec, req)
 
@@ -45,12 +46,30 @@ var _ = Describe("the update API handler", func() {
 		handler := updateAPI.New(scanner)
 
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest("GET", "/v1/update", nil)
+		req := httptest.NewRequest(http.MethodPost, "/v1/update", nil)
 
 		handler.Handle(rec, req)
 
 		Expect(scanner.called).To(BeTrue())
 		Expect(scanner.images).To(BeNil())
 		Expect(scanner.wait).To(BeFalse())
+	})
+
+	// The documented interface is POST (docs/HOWTO.md), but the handler ran a scan
+	// for any verb at all. That matters beyond tidiness: intermediaries and clients
+	// treat GET as safe to auto-retry, so a timed-out GET can be replayed into
+	// repeated full scans -- the same pileup the scan queue is bounded against.
+	It("should refuse verbs other than POST", func() {
+		for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodHead} {
+			scanner := &fakeScanner{}
+			handler := updateAPI.New(scanner)
+
+			rec := httptest.NewRecorder()
+			handler.Handle(rec, httptest.NewRequest(method, "/v1/update", nil))
+
+			Expect(rec.Code).To(Equal(http.StatusMethodNotAllowed), method)
+			Expect(rec.Header().Get("Allow")).To(Equal(http.MethodPost), method)
+			Expect(scanner.called).To(BeFalse(), "%s must not trigger a scan", method)
+		}
 	})
 })

@@ -141,9 +141,14 @@ func stopContainersInReversedOrder(containers []types.Container, client containe
 		} else {
 			stopped[containers[i].ID()] = true
 		}
-
 	}
 	return
+}
+
+// isRemovalUnconfirmed exists at package scope because stopStaleContainer shadows
+// the container package with its own parameter name.
+func isRemovalUnconfirmed(err error) bool {
+	return errors.Is(err, container.ErrRemovalUnconfirmed)
 }
 
 func stopStaleContainer(container types.Container, client container.Client, params types.UpdateParams) error {
@@ -177,6 +182,19 @@ func stopStaleContainer(container types.Container, client container.Client, para
 	}
 
 	if err := client.StopContainer(container, params.Timeout); err != nil {
+		// The daemon accepted the removal and almost certainly finished it just after
+		// we stopped waiting. Reporting that as a failed stop is what turns a slow
+		// removal into a permanently missing container: the caller skips the recreate
+		// and the daemon completes the removal anyway. Attempting it is safe --
+		// docker enforces name uniqueness, so if the container really is still there
+		// the create fails on the name and nothing is destroyed. Classified here
+		// rather than in the caller so the rolling-restart path inherits it too.
+		if isRemovalUnconfirmed(err) {
+			log.WithFields(log.Fields{
+				"container": container.Name(),
+			}).Warn("Removal was not confirmed in time; attempting to recreate anyway")
+			return nil
+		}
 		log.Error(err)
 		return err
 	}

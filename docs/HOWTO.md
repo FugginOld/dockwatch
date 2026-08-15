@@ -89,6 +89,18 @@ docker run -d --name dockwatch --restart unless-stopped \
   ghcr.io/fugginold/dockwatch:latest --interval 300
 ```
 
+## Published tags
+
+| Tag | What it is |
+| --- | --- |
+| `latest` | The highest released version. Only a release tag ever moves it. |
+| `1.2.3`, `1.2` | A specific release, and the newest patch of that minor. |
+| `main` | Tip of the `main` branch. Pre-release; use it only to try unreleased fixes. |
+
+`latest` previously also got republished from every commit to `main`, which meant
+unreleased code reached anyone pulling it. It now tracks releases only, and tip of
+main has moved to its own `main` tag.
+
 If you **built from source**, a locally-built image has no registry upstream, so
 Dockwatch cannot self-update it. Pull the latest source and rebuild:
 

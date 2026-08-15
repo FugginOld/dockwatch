@@ -66,6 +66,7 @@ func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		writeResponse(w, response{Schedule: spec, NextRun: nextRun.Format(time.RFC3339)}, http.StatusOK)
 		return
 	default:
+		w.Header().Set("Allow", "GET, POST, PUT")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}

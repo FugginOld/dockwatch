@@ -24,6 +24,9 @@ type TestData struct {
 	// StalenessError maps a container name to the error its staleness check should
 	// return, for exercising the paths where dockwatch cannot determine staleness.
 	StalenessError map[string]error
+	// StopErrors maps a container name to the error its stop should return, for
+	// exercising how the update flow reacts to a specific stop failure.
+	StopErrors map[string]error
 	// StartedContainers records the name of every container StartContainer was
 	// called for, so a test can assert that a container dockwatch failed to stop
 	// was not started again.
@@ -56,6 +59,12 @@ func (client MockClient) ListContainers(_ t.Filter) ([]t.Container, error) {
 
 // StopContainer is a mock method
 func (client MockClient) StopContainer(c t.Container, _ time.Duration) error {
+	if err, ok := client.TestData.StopErrors[c.Name()]; ok {
+		// Wrapped on purpose: production wraps the sentinel with the container name,
+		// so a consumer comparing with == instead of errors.Is would pass here while
+		// failing against the real client.
+		return fmt.Errorf("mock stop failed: %w", err)
+	}
 	if c.Name() == client.TestData.NameOfContainerToKeep {
 		return errors.New("tried to stop the instance we want to keep")
 	}

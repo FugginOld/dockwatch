@@ -4,11 +4,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/fugginold/dockwatch/internal/actions"
-	"github.com/fugginold/dockwatch/pkg/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
 	dockerImage "github.com/docker/docker/api/types/image"
 	"github.com/docker/go-connections/nat"
+	"github.com/fugginold/dockwatch/internal/actions"
+	"github.com/fugginold/dockwatch/pkg/container"
+	"github.com/fugginold/dockwatch/pkg/types"
 
 	. "github.com/fugginold/dockwatch/internal/actions/mocks"
 	. "github.com/onsi/ginkgo"
@@ -518,5 +519,42 @@ var _ = Describe("the update action", func() {
 
 		})
 
+	})
+})
+
+// A removal the daemon accepted but had not finished within the budget used to be
+// recorded as a failed stop, so the recreate was skipped -- and the daemon finished
+// the removal a moment later regardless, leaving nothing behind. Attempting the
+// recreate is safe: docker enforces name uniqueness, so if the container really is
+// still there the create fails and the original is left untouched.
+var _ = Describe("a container whose removal was not confirmed", func() {
+	It("should still be recreated", func() {
+		testData := getCommonTestData("")
+		testData.StopErrors = map[string]error{
+			"test-container-01": container.ErrRemovalUnconfirmed,
+		}
+		client := CreateMockClient(testData, false, false)
+
+		_, err := actions.Update(client, types.UpdateParams{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(testData.StartedContainers).To(ContainElement("test-container-01"),
+			"an unconfirmed removal must not skip the recreate; the container is otherwise lost")
+	})
+
+	// The rolling-restart path has its own stop/restart loop, so a fix applied only
+	// to the batched path leaves this one still losing containers.
+	It("should still be recreated during a rolling restart", func() {
+		testData := getCommonTestData("")
+		testData.StopErrors = map[string]error{
+			"test-container-01": container.ErrRemovalUnconfirmed,
+		}
+		client := CreateMockClient(testData, false, false)
+
+		_, err := actions.Update(client, types.UpdateParams{RollingRestart: true})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(testData.StartedContainers).To(ContainElement("test-container-01"),
+			"the rolling-restart path must handle an unconfirmed removal too")
 	})
 })

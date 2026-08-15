@@ -126,10 +126,17 @@ jobs:
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
+          # :latest means the highest released version, and the guard step above is
+          # what decides that -- so it is the only rule allowed to set it. An
+          # is_default_branch rule for :latest as well would republish it from
+          # untagged main on every commit, which is exactly the pre-release code the
+          # guard exists to keep away from everyone pulling :latest. Tip of main
+          # gets its own channel instead: without that nothing would match on a main
+          # push and the tag list would come out empty.
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=main,enable={{is_default_branch}}
             type=raw,value=latest,enable=${{ steps.guard.outputs.is_highest }}
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -140,3 +147,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Without this the Dockerfile's ARG VERSION=dev default stands, so every
+          # released image logged "Dockwatch dev" and sent User-Agent: Dockwatch/dev
+          # to every registry. Tags get the semver; main gets a traceable sha.
+          build-args: |
+            VERSION=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('main-{0}', github.sha) }}

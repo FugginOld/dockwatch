@@ -1,6 +1,8 @@
 package container
 
 import (
+	"errors"
+	"regexp"
 	"time"
 
 	"github.com/docker/docker/api/types/network"
@@ -39,6 +41,49 @@ var _ = Describe("the client", func() {
 	AfterEach(func() {
 		mockServer.Close()
 	})
+	// A removal the daemon accepted but has not finished must be reported as
+	// distinctly "unconfirmed" rather than as a failed stop -- the caller uses that
+	// to decide whether to recreate, and treating it as a failure is what leaves the
+	// container permanently gone once the daemon does finish.
+	Describe("waitForContainerRemoval", func() {
+		It("should report an unconfirmed removal when the budget runs out", func() {
+			// Never answers, so the wait can only end on our own deadline.
+			mockServer.AppendHandlers(func(_ http.ResponseWriter, _ *http.Request) {
+				time.Sleep(2 * time.Second)
+			})
+			client := dockerClient{api: docker}
+
+			err := client.waitForContainerRemoval(MockContainer(WithContainerState(dockercontainer.State{Running: true})), 50*time.Millisecond)
+
+			Expect(errors.Is(err, ErrRemovalUnconfirmed)).To(BeTrue(),
+				"a removal still in flight must not be reported as a failed stop")
+		})
+	})
+
+	// StopContainer must propagate the sentinel, not just any error: the caller uses
+	// errors.Is to decide between recreating and dropping the container, so losing
+	// the %w wrap here silently restores the container-losing behaviour with every
+	// test still green.
+	Describe("StopContainer with a removal that never confirms", func() {
+		It("should report it as an unconfirmed removal", func() {
+			original := containerRemovalTimeout
+			containerRemovalTimeout = 50 * time.Millisecond
+			defer func() { containerRemovalTimeout = original }()
+
+			mockServer.RouteToHandler("DELETE", regexp.MustCompile(`/containers/[^/]+$`),
+				ghttp.RespondWith(http.StatusNoContent, nil))
+			// Accepts the wait but never answers, so only our deadline ends it.
+			mockServer.RouteToHandler("POST", regexp.MustCompile(`/containers/[^/]+/wait$`),
+				func(_ http.ResponseWriter, _ *http.Request) { time.Sleep(2 * time.Second) })
+
+			client := dockerClient{api: docker}
+			err := client.StopContainer(MockContainer(WithContainerState(dockercontainer.State{Running: false})), 0)
+
+			Expect(errors.Is(err, ErrRemovalUnconfirmed)).To(BeTrue(),
+				"the sentinel must survive the wrap, or the caller drops the container")
+		})
+	})
+
 	Describe("WarnOnHeadPullFailed", func() {
 		containerUnknown := MockContainer(WithImageName("unknown.repo/prefix/imagename:latest"))
 		containerKnown := MockContainer(WithImageName("docker.io/prefix/imagename:latest"))
