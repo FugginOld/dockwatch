@@ -1,13 +1,11 @@
 #
 # Builder
 #
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26.6-alpine AS builder
 
 ARG VERSION=dev
 
 WORKDIR /src
-
-RUN apk add --no-cache ca-certificates tzdata
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -20,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 #
 # Runtime
 #
-FROM alpine:latest
+FROM alpine:3.23
 
 RUN apk add --no-cache ca-certificates tzdata
 

@@ -3,6 +3,8 @@ package container
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -22,6 +24,44 @@ import (
 )
 
 const defaultStopSignal = "SIGTERM"
+
+// maxExecOutputBytes caps how much of a lifecycle hook's output is read into memory.
+// A hook that writes without bound should not be able to exhaust the daemon it is
+// supposed to be maintaining.
+const maxExecOutputBytes = 1 << 20
+
+// ErrRemovalUnconfirmed means the removal was accepted by the daemon but had not
+// finished within the budget. The container is very likely gone a moment later, so
+// treating this as a failed stop is what loses it for good: the caller skips the
+// recreate and the daemon completes the removal regardless.
+//
+// The recreate is safe to attempt on this: docker enforces name uniqueness, and
+// dockwatch recreates under the old name, so if the container really is still
+// there the create fails with a name conflict and nothing is destroyed. (It will
+// be stopped rather than running at that point -- the kill was already sent --
+// which is exactly where the old behaviour left it too.) A pending removal targets
+// the old container ID, so it cannot reach through and delete the new one.
+var ErrRemovalUnconfirmed = errors.New("container removal not confirmed within the timeout")
+
+// containerRemovalTimeout is the minimum time we allow the daemon to finish removing
+// a container. It is deliberately decoupled from the user's --stop-timeout: that
+// budget covers the graceful stop, and removal is a separate operation whose duration
+// depends on the writable layer rather than on the process shutting down.
+//
+// The costs are asymmetric. Waiting too long only slows an update cycle, while
+// giving up too early reports a failed stop for a container the daemon removes
+// moments later -- and the restart pass then skips it, so it is gone for good.
+// A var rather than a const so a test can shrink it: the 60s floor otherwise makes
+// the timeout path untestable, and that path is load-bearing -- it is what tells
+// the caller to recreate instead of dropping the container.
+var containerRemovalTimeout = 1 * time.Minute
+
+// removalTimeout is the budget for confirming a removal. containerRemovalTimeout is a
+// floor rather than a fixed value, so a caller that deliberately asks for longer --
+// cleanupExcessDockwatchs passes 10 minutes -- still gets what it asked for.
+func removalTimeout(stopTimeout time.Duration) time.Duration {
+	return max(stopTimeout, containerRemovalTimeout)
+}
 
 // A Client is the interface through which dockwatch interacts with the
 // Docker API.
@@ -183,8 +223,11 @@ func (client dockerClient) GetContainer(containerID t.ContainerID) (t.Container,
 
 	imageInfo, err := client.api.ImageInspect(bg, containerInfo.Image)
 	if err != nil {
+		// Kept on the container rather than only logged here: without it the failure
+		// resurfaces much later as a bare "no image info" with nothing pointing at
+		// the inspect that actually failed.
 		log.Warnf("Failed to retrieve container image info: %v", err)
-		return &Container{containerInfo: &containerInfo, imageInfo: nil}, nil
+		return &Container{containerInfo: &containerInfo, imageInfo: nil, imageInfoErr: err}, nil
 	}
 
 	return &Container{containerInfo: &containerInfo, imageInfo: &imageInfo}, nil
@@ -221,20 +264,38 @@ func (client dockerClient) StopContainer(c t.Container, timeout time.Duration) e
 				log.Debugf("Container %s not found, skipping removal.", shortID)
 				return nil
 			}
-			return err
+			if !cerrdefs.IsConflict(err) {
+				return err
+			}
+			// The daemon is already removing this container, which is what we asked
+			// for. Treating that as a failed stop would make the caller skip the
+			// recreate for a container that is about to disappear.
+			log.Debugf("Removal of container %s already in progress, waiting for it.", shortID)
 		}
+	}
 
-		if err := client.waitForContainerRemoval(c, timeout); err != nil {
-			return fmt.Errorf("container %s (%s) could not be removed: %w", c.Name(), shortID, err)
-		}
+	// The daemon removes the container asynchronously in both cases -- on our
+	// request above, or on its own for AutoRemove containers. Recreating before
+	// that finishes fails with a 409 name conflict, so wait for it either way.
+	if err := client.waitForContainerRemoval(c, removalTimeout(timeout)); err != nil {
+		// Running out of budget is not the same as the removal failing: the daemon
+		// took the request and finishes it on its own schedule. Keep that distinct
+		// so the caller can still recreate rather than dropping the container.
+		return fmt.Errorf("container %s (%s): %w", c.Name(), shortID, err)
 	}
 
 	return nil
 }
 
 func (client dockerClient) GetNetworkConfig(c t.Container) *network.NetworkingConfig {
+	// VerifyConfiguration checks Config and HostConfig but not this one, and a
+	// container inspected without network settings panicked the recreate.
+	var endpoints map[string]*network.EndpointSettings
+	if info := c.ContainerInfo(); info != nil && info.NetworkSettings != nil {
+		endpoints = info.NetworkSettings.Networks
+	}
 	config := &network.NetworkingConfig{
-		EndpointsConfig: c.ContainerInfo().NetworkSettings.Networks,
+		EndpointsConfig: endpoints,
 	}
 
 	for _, ep := range config.EndpointsConfig {
@@ -331,7 +392,13 @@ func (client dockerClient) IsContainerStale(container t.Container, params t.Upda
 }
 
 func (client dockerClient) HasNewImage(ctx context.Context, container t.Container) (hasNew bool, latestImage t.ImageID, err error) {
-	currentImageID := t.ImageID(container.ContainerInfo().ContainerJSONBase.Image)
+	// Same class as the label readers: a scan calls this for every container, so a
+	// container the daemon returned without info panics the whole scan rather than
+	// failing just that container.
+	var currentImageID t.ImageID
+	if info := container.ContainerInfo(); info != nil && info.ContainerJSONBase != nil {
+		currentImageID = t.ImageID(info.Image)
+	}
 	imageName := container.ImageName()
 
 	newImageInfo, err := client.api.ImageInspect(ctx, imageName)
@@ -376,7 +443,7 @@ func (client dockerClient) PullImage(ctx context.Context, container t.Container)
 
 	log.WithFields(fields).Debugf("Checking if pull is needed")
 
-	if match, err := digest.CompareDigest(container, opts.RegistryAuth); err != nil {
+	if match, err := digest.CompareDigest(ctx, container, opts.RegistryAuth); err != nil {
 		headLevel := log.DebugLevel
 		if client.WarnOnHeadPullFailed(container) {
 			headLevel = log.WarnLevel
@@ -399,12 +466,51 @@ func (client dockerClient) PullImage(ctx context.Context, container t.Container)
 	}
 
 	defer response.Close()
-	// the pull request will be aborted prematurely unless the response is read
-	if _, err = io.ReadAll(response); err != nil {
-		log.Error(err)
+	// The pull is aborted prematurely unless the response is consumed, which
+	// checkPullResponse does -- except when it returns early on a reported failure,
+	// where the pull has already failed and the Close below releases the connection.
+	if err := checkPullResponse(response); err != nil {
+		log.WithFields(fields).Error(err)
 		return err
 	}
 	return nil
+}
+
+// checkPullResponse consumes a pull progress stream to completion, returning the
+// first failure the daemon reported in it.
+//
+// ImagePull's return value only covers failures raised before the stream opens, so
+// rate limits, registry 5xx and layer download failures are reported in-band. Left
+// unread, they turn a failed pull into a silent success: the old local image is
+// then inspected, found unchanged, and the container is reported as up to date.
+func checkPullResponse(r io.Reader) error {
+	decoder := json.NewDecoder(r)
+	for {
+		// errorDetail is the canonical field; the flat "error" has been deprecated
+		// since API v1.4 and is documented as omitted in a future release. Docker's
+		// own reader checks errorDetail first, so match that precedence rather than
+		// depending on a field that is scheduled to disappear.
+		var msg struct {
+			ErrorDetail *struct {
+				Message string `json:"message"`
+			} `json:"errorDetail"`
+			Error string `json:"error"`
+		}
+
+		if err := decoder.Decode(&msg); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+
+		if msg.ErrorDetail != nil && msg.ErrorDetail.Message != "" {
+			return errors.New(msg.ErrorDetail.Message)
+		}
+		if msg.Error != "" {
+			return errors.New(msg.Error)
+		}
+	}
 }
 
 func (client dockerClient) RemoveImageByID(id t.ImageID) error {
@@ -463,6 +569,11 @@ func (client dockerClient) ExecuteCommand(containerID t.ContainerID, command str
 	})
 	if attachErr != nil {
 		clog.Errorf("Failed to extract command exec logs: %v", attachErr)
+	} else {
+		// Close here rather than at the point of use: the ExecStart below returns
+		// early on failure, and a hijacked connection closed by nobody is a leaked
+		// fd every time that happens, in a process designed to run for months.
+		defer response.Close()
 	}
 
 	// Run the exec
@@ -474,9 +585,16 @@ func (client dockerClient) ExecuteCommand(containerID t.ContainerID, command str
 
 	var output string
 	if attachErr == nil {
-		defer response.Close()
 		var writer bytes.Buffer
-		written, err := writer.ReadFrom(response.Reader)
+		// Capped: a hook writing unbounded stdout was read entirely into memory.
+		// The remainder still has to be drained -- stopping at the cap leaves the
+		// hijacked connection's buffer full, the hook blocked in write(2), and the
+		// exec never finishing.
+		written, err := writer.ReadFrom(io.LimitReader(response.Reader, maxExecOutputBytes))
+		if written >= maxExecOutputBytes {
+			clog.Warnf("Command output exceeded %d bytes; truncating", maxExecOutputBytes)
+			_, _ = io.Copy(io.Discard, response.Reader)
+		}
 		if err != nil {
 			clog.Error(err)
 		} else if written > 0 {
@@ -575,6 +693,13 @@ func (client dockerClient) waitForContainerRemoval(c t.Container, waitTime time.
 			// Container already gone — that's the desired outcome
 			return nil
 		}
+		// Our own budget running out is reported here as whatever the SDK wrapped
+		// the cancellation in, so ask the context rather than trying to unwrap it.
+		if ctx.Err() != nil {
+			return ErrRemovalUnconfirmed
+		}
 		return err
+	case <-ctx.Done():
+		return ErrRemovalUnconfirmed
 	}
 }

@@ -295,13 +295,13 @@ func EnvConfig(cmd *cobra.Command) error {
 	if err = setEnvOptStr("DOCKER_HOST", host); err != nil {
 		return err
 	}
-	if err = setEnvOptBool("DOCKER_TLS_VERIFY", tls); err != nil {
+	if err = setEnvOptBool("DOCKER_TLS_VERIFY", tls, flags.Changed("tlsverify")); err != nil {
 		return err
 	}
 	if err = setEnvOptStr("DOCKER_API_VERSION", version); err != nil {
 		return err
 	}
-	if err = setEnvOptBool("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", registryTLSSkipVerify); err != nil {
+	if err = setEnvOptBool("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", registryTLSSkipVerify, flags.Changed("registry-tls-skip-verify")); err != nil {
 		return err
 	}
 	return nil
@@ -349,11 +349,27 @@ func setEnvOptStr(env string, opt string) error {
 	return nil
 }
 
-func setEnvOptBool(env string, opt bool) error {
+// setEnvOptBool writes a boolean flag through to its environment variable, in both
+// directions. Only setting it meant an explicit false could never override a value
+// inherited from the environment, so --registry-tls-skip-verify=false left
+// InsecureSkipVerify on.
+//
+// A false value clears the variable only when the operator actually passed the flag.
+// The flag default comes from envBool, which uses strconv.ParseBool, while the docker
+// client asks only whether DOCKER_TLS_VERIFY is non-empty -- so "yes", "on", "0" and
+// "false" all yield a false default while the daemon connection is verifying today.
+// Clearing on a default-valued flag would silently turn that verification off.
+//
+// Clearing rather than writing "0" for the same reason: to the docker client "0" is
+// non-empty and therefore means verify, the opposite of what was asked.
+func setEnvOptBool(env string, opt bool, flagChanged bool) error {
 	if opt {
 		return setEnvOptStr(env, "1")
 	}
-	return nil
+	if !flagChanged {
+		return nil
+	}
+	return os.Unsetenv(env)
 }
 
 // GetSecretsFromFiles checks if passwords/tokens/webhooks have been passed as a file instead of plaintext.
@@ -361,6 +377,9 @@ func setEnvOptBool(env string, opt bool) error {
 func GetSecretsFromFiles(rootCmd *cobra.Command) {
 	flags := rootCmd.PersistentFlags()
 
+	// Keep these string-valued. The fatal below interpolates the error, which is safe
+	// only because a failed flags.Set on a string flag cannot contain the value; a
+	// Duration or Int secret would return a strconv error carrying the file contents.
 	secrets := []string{
 		"http-api-token",
 	}
@@ -390,6 +409,13 @@ func getSecretFromFile(flags *pflag.FlagSet, secret string) error {
 						continue
 					}
 					values = append(values, line)
+				}
+				// A read that fails part-way -- a directory, or an unreadable file --
+				// otherwise leaves an empty slice behind and the secret silently
+				// becomes "no value" instead of a fatal startup error.
+				if err := scanner.Err(); err != nil {
+					_ = file.Close()
+					return err
 				}
 				if err := file.Close(); err != nil {
 					return err
@@ -421,8 +447,25 @@ func isFile(s string) bool {
 		// This still allows for paths that start with 'c:\' etc.
 		return false
 	}
-	_, err := os.Stat(s)
-	return !errors.Is(err, os.ErrNotExist)
+	return isFileStat(os.Stat(s))
+}
+
+// isFileStat decides whether a stat result means "this value is a path".
+//
+// A value too long or malformed for the filesystem -- a strong random token, for
+// instance -- must not be read as a filename, or the resulting error carries the
+// secret into the logs. But a path we merely cannot stat, typically because the
+// file or a parent directory is not readable by this user, is still a path: saying
+// otherwise would leave the flag holding the path string and use that as the
+// secret, so an unreadable token file would silently become a guessable one. The
+// same applies to a directory -- what a missing bind-mount source or a subPath-less
+// secret volume leaves behind: it must stay a path so the read fails loudly rather
+// than the flag keeping the path string. The read error names only the path.
+func isFileStat(info os.FileInfo, err error) bool {
+	if err == nil {
+		return info != nil
+	}
+	return errors.Is(err, os.ErrPermission)
 }
 
 // ProcessFlagAliases updates the value of flags that are being set by helper flags
@@ -473,6 +516,12 @@ func ProcessFlagAliases(flags *pflag.FlagSet) {
 	// update schedule flag to match interval if it's set, or to the default if none of them are
 	if intervalChanged || !scheduleChanged {
 		interval, _ := flags.GetInt(`interval`)
+		// "@every 0s" is not rejected downstream -- cron clamps it up to one second --
+		// so a mistyped interval silently became a full scan of every container,
+		// against every registry, once a second, forever.
+		if interval <= 0 {
+			log.Fatalf(`Interval must be a positive number of seconds, got %d.`, interval)
+		}
 		_ = flags.Set(`schedule`, fmt.Sprintf(`@every %ds`, interval))
 	}
 

@@ -1,9 +1,11 @@
 package digest_test
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	dockerTypes "github.com/docker/cli/cli/config/types"
 	"net/http"
 	"os"
 	"testing"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/fugginold/dockwatch/internal/actions/mocks"
 	"github.com/fugginold/dockwatch/internal/meta"
+	trust "github.com/fugginold/dockwatch/pkg/registry"
 	"github.com/fugginold/dockwatch/pkg/registry/digest"
 	wtTypes "github.com/fugginold/dockwatch/pkg/types"
 	. "github.com/onsi/ginkgo"
@@ -69,7 +72,7 @@ var _ = Describe("Digests", func() {
 		It("should return true if digests match",
 			SkipIfCredentialsEmpty(GHCRCredentials, func() {
 				creds := fmt.Sprintf("%s:%s", GHCRCredentials.Username, GHCRCredentials.Password)
-				matches, err := digest.CompareDigest(mockContainer, creds)
+				matches, err := digest.CompareDigest(context.Background(), mockContainer, creds)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(matches).To(Equal(true))
 			}),
@@ -82,7 +85,7 @@ var _ = Describe("Digests", func() {
 
 		})
 		It("should return an error when container contains no image info", func() {
-			matches, err := digest.CompareDigest(mockContainerNoImage, `user:pass`)
+			matches, err := digest.CompareDigest(context.Background(), mockContainerNoImage, `user:pass`)
 			Expect(err).To(HaveOccurred())
 			Expect(matches).To(Equal(false))
 		})
@@ -120,15 +123,43 @@ var _ = Describe("Digests", func() {
 					}),
 				),
 			)
-			dig, err := digest.GetDigest(server.URL(), "token")
+			dig, err := digest.GetDigest(context.Background(), server.URL(), "token")
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dig).To(Equal(mockDigest))
 		})
 
-		It("should return an error if token is missing", func() {
-			_, err := digest.GetDigest(server.URL(), "")
+		// Artifactory and nginx-fronted registries strip this header on HEAD.
+		// Returning "" as a valid digest made the comparison never match, so every
+		// poll pulled the whole image -- the rate-limit consumption the HEAD exists
+		// to avoid -- and logged nothing, because that is the normal "differ" path.
+		It("should return an error when the registry omits the digest header", func() {
+			server.AppendHandlers(
+				ghttp.RespondWith(http.StatusOK, "", http.Header{}),
+			)
+			dig, err := digest.GetDigest(context.Background(), server.URL(), "token")
 			Expect(err).To(HaveOccurred())
+			Expect(dig).To(BeEmpty())
+		})
+
+		// An empty token now means "the registry issued no challenge", which is how
+		// a registry serving anonymous reads is handled -- previously that path
+		// errored out and every poll fell back to a full pull. A registry that does
+		// want auth still answers 401, so a genuinely missing token fails loudly.
+		It("should send no authorization header when there is no token", func() {
+			server.AppendHandlers(
+				ghttp.CombineHandlers(
+					func(_ http.ResponseWriter, req *http.Request) {
+						Expect(req.Header.Get("Authorization")).To(BeEmpty())
+					},
+					ghttp.RespondWith(http.StatusOK, "", http.Header{
+						digest.ContentDigestHeader: []string{mockDigest},
+					}),
+				),
+			)
+			dig, err := digest.GetDigest(context.Background(), server.URL(), "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dig).To(Equal(mockDigest))
 		})
 	})
 
@@ -155,8 +186,27 @@ var _ = Describe("Digests", func() {
 			defer func() { _ = os.Setenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", old) }()
 
 			_ = os.Setenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", "not-a-bool")
-			_, err := digest.GetDigest("http://127.0.0.1:1", "token")
+			_, err := digest.GetDigest(context.Background(), "http://127.0.0.1:1", "token")
 			Expect(err).To(HaveOccurred())
 		})
 	})
 })
+
+// EncodeAuth writes with URLEncoding and TransformAuth read with StdEncoding. The two
+// alphabets differ only in the last two characters, so this stayed invisible until a
+// credential happened to encode a byte using one of them -- then the decode failed,
+// TransformAuth silently returned its input unchanged, and the registry got a
+// base64-of-JSON blob where it expected user:pass.
+func TestTransformAuthDecodesWhatEncodeAuthProduces(t *testing.T) {
+	encoded, err := trust.EncodeAuth(dockerTypes.AuthConfig{Username: "user", Password: "a?b?c?d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := digest.TransformAuth(encoded)
+
+	want := base64.StdEncoding.EncodeToString([]byte("user:a?b?c?d"))
+	if got != want {
+		t.Errorf("TransformAuth did not decode EncodeAuth's output\n got: %q\nwant: %q", got, want)
+	}
+}

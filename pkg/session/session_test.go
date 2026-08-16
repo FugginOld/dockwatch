@@ -100,6 +100,41 @@ func TestProgress_MarkForUpdate(t *testing.T) {
 	assert.Equal(t, "Updated", p[c.ID()].State())
 }
 
+// actions.Update calls MarkForUpdate for every container that is not monitor-only,
+// including ones AddSkipped already recorded because their staleness check failed.
+// Overwriting the skip there loses the only record that the check never ran.
+func TestProgress_MarkForUpdateDoesNotClobberSkipped(t *testing.T) {
+	p := session.Progress{}
+	c := newContainer("cid1", "c1", "image:latest")
+	p.AddSkipped(c, errors.New("pull failed: unauthorized"))
+
+	p.MarkForUpdate(c.ID())
+
+	assert.Equal(t, "Skipped", p[c.ID()].State())
+
+	report := session.NewReport(p)
+	assert.Len(t, report.Skipped(), 1, "a skipped container must stay in Skipped")
+	assert.Empty(t, report.Fresh(), "a container whose staleness check failed is not known to be fresh")
+}
+
+// A container stopped and removed as part of another container's update, which then
+// fails to start again, keeps its original image -- but it is not up to date, it is
+// deleted and not running.
+func TestReport_FailedIsNotReportedAsFresh(t *testing.T) {
+	p := session.Progress{}
+	c := newContainer("cid1", "linked-db", "image:latest")
+	p.AddScanned(c, c.SafeImageID()) // image never changed
+
+	p.UpdateFailed(map[types.ContainerID]error{
+		c.ID(): errors.New(`Conflict. The container name "/linked-db" is already in use`),
+	})
+
+	report := session.NewReport(p)
+
+	assert.Len(t, report.Failed(), 1, "a failed container must be reported as failed")
+	assert.Empty(t, report.Fresh())
+}
+
 func TestProgress_UpdateFailed(t *testing.T) {
 	p := session.Progress{}
 	c := newContainer("cid1", "c1", "image:latest")

@@ -1,7 +1,9 @@
 package daemon
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -67,6 +69,10 @@ func New(cfg Config) *Daemon {
 	return &Daemon{cfg: cfg, runner: NewRunner(cfg)}
 }
 
+// apiShutdownTimeout bounds how long we wait for in-flight API requests. An update
+// triggered over HTTP runs the whole scan inline, so this is generous.
+const apiShutdownTimeout = 30 * time.Second
+
 // Run executes the daemon according to opts and returns an error for any fatal
 // condition. A nil error means a clean exit. It blocks until interrupted when
 // running in periodic or interactive mode.
@@ -116,6 +122,11 @@ func (d *Daemon) Run(opts Options) error {
 				func(spec string) (time.Time, error) { return d.sched.Set(spec) },
 			)
 			httpAPI.RegisterFunc(scheduleHandler.Path, scheduleHandler.Handle)
+		} else {
+			// There is no schedule to read or change in this mode, so the endpoint is
+			// not registered and would otherwise 404 with no explanation -- which
+			// reads as a missing feature rather than a configuration consequence.
+			log.Info("/v1/schedule is unavailable: it needs periodic runs, which --http-api-update disables unless --http-api-periodic-polls is also set.")
 		}
 	}
 	if opts.EnableMetricsAPI {
@@ -123,8 +134,11 @@ func (d *Daemon) Run(opts Options) error {
 		httpAPI.RegisterHandler("/v1/metrics", promhttp.Handler())
 	}
 
+	// An API the operator explicitly enabled and that could not start is fatal.
+	// Logging and carrying on left dockwatch scanning with no update endpoint and
+	// still exiting 0, so an orchestrator saw a healthy container either way.
 	if err := httpAPI.Start(m.apiShouldBlock); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("failed to start API", err)
+		return fmt.Errorf("failed to start HTTP API: %w", err)
 	}
 
 	if opts.Interactive {
@@ -141,6 +155,16 @@ func (d *Daemon) Run(opts Options) error {
 		if d.sched != nil {
 			d.sched.Stop()
 		}
+
+		// Close the API before waiting, not after: otherwise a request arriving
+		// during shutdown starts a scan once runner.Wait() has already returned, and
+		// the process exits through the middle of it.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), apiShutdownTimeout)
+		if err := httpAPI.Shutdown(shutdownCtx); err != nil {
+			log.WithError(err).Warn("HTTP API did not shut down cleanly")
+		}
+		cancel()
+
 		log.Info("Waiting for running update to be finished...")
 		d.runner.Wait()
 	}
@@ -151,19 +175,19 @@ func (d *Daemon) Run(opts Options) error {
 // scanner adapts the Runner to the HTTP update API's Scanner interface,
 // mapping requested images onto the base filter.
 func (d *Daemon) scanner(base t.Filter) update.Scanner {
-	return scannerFunc(func(images []string, wait bool) {
+	return scannerFunc(func(images []string, wait bool) bool {
 		filter := filters.FilterByImage(images, base)
 		if wait {
-			d.runner.Run(filter)
-		} else {
-			d.runner.TryRun(filter)
+			return d.runner.Run(filter) != nil
 		}
+		_, ran := d.runner.TryRun(filter)
+		return ran
 	})
 }
 
-type scannerFunc func(images []string, wait bool)
+type scannerFunc func(images []string, wait bool) bool
 
-func (f scannerFunc) Scan(images []string, wait bool) { f(images, wait) }
+func (f scannerFunc) Scan(images []string, wait bool) bool { return f(images, wait) }
 
 // awaitDockerClient retries Ping until the Docker API is reachable, failing
 // fatally after 5 attempts.

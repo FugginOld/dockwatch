@@ -1,13 +1,15 @@
 package actions_test
 
 import (
+	"errors"
 	"time"
 
-	"github.com/fugginold/dockwatch/internal/actions"
-	"github.com/fugginold/dockwatch/pkg/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
 	dockerImage "github.com/docker/docker/api/types/image"
 	"github.com/docker/go-connections/nat"
+	"github.com/fugginold/dockwatch/internal/actions"
+	"github.com/fugginold/dockwatch/pkg/container"
+	"github.com/fugginold/dockwatch/pkg/types"
 
 	. "github.com/fugginold/dockwatch/internal/actions/mocks"
 	. "github.com/onsi/ginkgo"
@@ -66,6 +68,24 @@ func getLinkedTestData(withImageInfo bool) *TestData {
 }
 
 var _ = Describe("the update action", func() {
+	// Whether a container may be started again is a fact about that container, not
+	// about its image. Tracking it per image means one container sharing an image
+	// with another decides the outcome for both -- and the container that failed to
+	// stop is the one dockwatch must leave alone, since it is still running the
+	// config it was refused permission to replace.
+	When("one of two containers sharing an image cannot be stopped", func() {
+		It("should not start the container it failed to stop", func() {
+			testData := getCommonTestData("test-container-01")
+			client := CreateMockClient(testData, false, false)
+
+			_, err := actions.Update(client, types.UpdateParams{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(testData.StartedContainers).NotTo(ContainElement("test-container-01"),
+				"a container that could not be stopped must not be started")
+		})
+	})
+
 	When("dockwatch has been instructed to clean up", func() {
 		When("there are multiple containers using the same image", func() {
 			It("should only try to remove the image once", func() {
@@ -109,16 +129,47 @@ var _ = Describe("the update action", func() {
 				Expect(client.TestData.TriedToRemoveImageCount).To(Equal(1))
 			})
 		})
+		// Update marks every container that is not monitor-only, including ones whose
+		// staleness check already failed. Losing the skip there is how an unreachable
+		// registry came to be reported as "everything is up to date".
+		When("a container's staleness check fails", func() {
+			It("should report it as skipped rather than fresh", func() {
+				data := getCommonTestData("")
+				data.StalenessError = map[string]error{
+					"test-container-01": errors.New("pull failed: unauthorized"),
+				}
+				client := CreateMockClient(data, false, false)
+
+				report, err := actions.Update(client, types.UpdateParams{})
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(report.Skipped()).To(HaveLen(1))
+				Expect(report.Skipped()[0].Name()).To(Equal("test-container-01"))
+				Expect(report.Skipped()[0].Error()).To(ContainSubstring("unauthorized"))
+				for _, c := range report.Fresh() {
+					Expect(c.Name()).NotTo(Equal("test-container-01"))
+				}
+			})
+		})
 		When("updating a linked container with missing image info", func() {
 			It("should gracefully fail", func() {
 				client := CreateMockClient(getLinkedTestData(false), false, false)
 
 				report, err := actions.Update(client, types.UpdateParams{})
 				Expect(err).NotTo(HaveOccurred())
-				// Note: Linked containers that were skipped for recreation is not counted in Failed
-				// If this happens, an error is emitted to the logs, so a notification should still be sent.
+				// VerifyConfiguration fails for the linked container, so stopStaleContainer
+				// returns before StopContainer (update.go:155-160): it is deliberately left
+				// running its original image rather than being stopped with no way back.
+				//
+				// It still belongs in Failed, not Fresh. The update it was queued for did
+				// not happen, so calling it fresh asserts it is up to date when it is
+				// stale and currently un-updatable -- and notifications read these buckets.
+				// This reverses an earlier deliberate choice to leave it out of Failed on
+				// the grounds that the error reaches the logs; the objection is that Fresh
+				// is an affirmative claim of health, not merely an omission from Failed.
 				Expect(report.Updated()).To(HaveLen(1))
-				Expect(report.Fresh()).To(HaveLen(1))
+				Expect(report.Failed()).To(HaveLen(1))
+				Expect(report.Fresh()).To(BeEmpty())
 			})
 		})
 	})
@@ -468,5 +519,42 @@ var _ = Describe("the update action", func() {
 
 		})
 
+	})
+})
+
+// A removal the daemon accepted but had not finished within the budget used to be
+// recorded as a failed stop, so the recreate was skipped -- and the daemon finished
+// the removal a moment later regardless, leaving nothing behind. Attempting the
+// recreate is safe: docker enforces name uniqueness, so if the container really is
+// still there the create fails and the original is left untouched.
+var _ = Describe("a container whose removal was not confirmed", func() {
+	It("should still be recreated", func() {
+		testData := getCommonTestData("")
+		testData.StopErrors = map[string]error{
+			"test-container-01": container.ErrRemovalUnconfirmed,
+		}
+		client := CreateMockClient(testData, false, false)
+
+		_, err := actions.Update(client, types.UpdateParams{})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(testData.StartedContainers).To(ContainElement("test-container-01"),
+			"an unconfirmed removal must not skip the recreate; the container is otherwise lost")
+	})
+
+	// The rolling-restart path has its own stop/restart loop, so a fix applied only
+	// to the batched path leaves this one still losing containers.
+	It("should still be recreated during a rolling restart", func() {
+		testData := getCommonTestData("")
+		testData.StopErrors = map[string]error{
+			"test-container-01": container.ErrRemovalUnconfirmed,
+		}
+		client := CreateMockClient(testData, false, false)
+
+		_, err := actions.Update(client, types.UpdateParams{RollingRestart: true})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(testData.StartedContainers).To(ContainElement("test-container-01"),
+			"the rolling-restart path must handle an unconfirmed removal too")
 	})
 })

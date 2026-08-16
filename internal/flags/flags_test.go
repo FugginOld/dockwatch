@@ -1,7 +1,9 @@
 package flags
 
 import (
+	"io/fs"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -96,6 +98,100 @@ func TestHTTPAPIPeriodicPollsFlag(t *testing.T) {
 func TestIsFile(t *testing.T) {
 	assert.False(t, isFile("https://google.com"), "an URL should never be considered a file")
 	assert.True(t, isFile(os.Args[0]), "the currently running binary path should always be considered a file")
+}
+
+// A secret is only a file path if stat actually succeeded. Treating every stat
+// error except ErrNotExist as "this is a file" turns a strong random token into a
+// fatal startup error -- and the error it logs embeds the token.
+func TestIsFileRejectsValuesThatCannotBeStatted(t *testing.T) {
+	// Longer than any single path component: ENAMETOOLONG on Linux, ERROR_INVALID_NAME
+	// on Windows. Neither is ErrNotExist.
+	assert.False(t, isFile(strings.Repeat("a", 300)), "an over-long token is not a file")
+}
+
+// A directory where a secret file was expected -- what `-v /host/missing:/run/secrets/token`
+// and a subPath-less k8s secret mount both produce -- must stay a path, so the read
+// fails loudly. Classifying it "not a file" leaves the flag holding the literal path
+// and the HTTP API ends up guarded by "/run/secrets/token" with nothing logged.
+func TestIsFileTreatsADirectoryAsAPath(t *testing.T) {
+	assert.True(t, isFile(t.TempDir()), "a directory is a path, so the read fails loudly")
+}
+
+// Requiring a successful stat would classify an unreadable secret file as "not a
+// path", leaving the flag holding the path string -- so the HTTP API would end up
+// guarded by the literal "/run/secrets/api_token" with nothing logged. A file we
+// cannot stat for permission reasons must stay a path so the read fails loudly.
+func TestIsFileStatClassification(t *testing.T) {
+	perm := &fs.PathError{Op: "stat", Path: "/run/secrets/api_token", Err: os.ErrPermission}
+	assert.True(t, isFileStat(nil, perm), "an unreadable path is still a path")
+
+	missing := &fs.PathError{Op: "stat", Path: "/nope", Err: os.ErrNotExist}
+	assert.False(t, isFileStat(nil, missing), "a missing path is not a file")
+
+	invalid := &fs.PathError{Op: "stat", Path: "bad", Err: os.ErrInvalid}
+	assert.False(t, isFileStat(nil, invalid), "an unusable name is not a file")
+}
+
+// An explicit --registry-tls-skip-verify=false must beat a value inherited from the
+// environment. Leaving the variable set means InsecureSkipVerify stays on for every
+// registry HEAD request while the operator believes they asked for verification.
+func TestEnvConfig_ExplicitFalseClearsRegistryTLSSkipVerify(t *testing.T) {
+	t.Setenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", "1")
+
+	cmd := new(cobra.Command)
+	RegisterDockerFlags(cmd)
+	require.NoError(t, cmd.ParseFlags([]string{`--registry-tls-skip-verify=false`}))
+	require.NoError(t, EnvConfig(cmd))
+
+	assert.False(t, envBool("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY"),
+		"an explicit false must not leave the inherited value in place")
+}
+
+// The flag defaults to the environment value, so this only fires when the operator
+// passes false explicitly -- at which point their instruction wins.
+func TestEnvConfig_ExplicitFalseClearsDockerTLSVerify(t *testing.T) {
+	t.Setenv("DOCKER_TLS_VERIFY", "1")
+
+	cmd := new(cobra.Command)
+	RegisterDockerFlags(cmd)
+	require.NoError(t, cmd.ParseFlags([]string{`--tlsverify=false`}))
+	require.NoError(t, EnvConfig(cmd))
+
+	assert.Empty(t, os.Getenv("DOCKER_TLS_VERIFY"),
+		"the docker client treats any non-empty value as verify, so false must unset it")
+}
+
+// The docker client treats any non-empty DOCKER_TLS_VERIFY as a request to verify,
+// while the flag default comes from strconv.ParseBool, which rejects values like
+// "yes" and reads "0"/"false" as false. Clearing the variable for a flag nobody
+// passed would therefore turn daemon TLS verification off for configurations that
+// currently have it on.
+func TestEnvConfig_LeavesUnparseableTLSVerifyAlone(t *testing.T) {
+	for _, value := range []string{"yes", "on", "0", "false"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("DOCKER_TLS_VERIFY", value)
+
+			cmd := new(cobra.Command)
+			RegisterDockerFlags(cmd)
+			require.NoError(t, cmd.ParseFlags([]string{}))
+			require.NoError(t, EnvConfig(cmd))
+
+			assert.Equal(t, value, os.Getenv("DOCKER_TLS_VERIFY"),
+				"an untouched flag must not clear the variable")
+		})
+	}
+}
+
+func TestEnvConfig_LeavesRegistrySkipVerifyAloneWhenFlagUntouched(t *testing.T) {
+	t.Setenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY", "yes")
+
+	cmd := new(cobra.Command)
+	RegisterDockerFlags(cmd)
+	require.NoError(t, cmd.ParseFlags([]string{}))
+	require.NoError(t, EnvConfig(cmd))
+
+	assert.Equal(t, "yes", os.Getenv("DOCKWATCH_REGISTRY_TLS_SKIP_VERIFY"),
+		"an untouched flag must not clear the variable")
 }
 
 func TestProcessFlagAliases(t *testing.T) {
@@ -267,4 +363,26 @@ func TestProcessFlagAliasesInvalidPorcelaineVersion(t *testing.T) {
 	assert.PanicsWithValue(t, `FATAL`, func() {
 		ProcessFlagAliases(flags)
 	})
+}
+
+// --interval 0 produced "@every 0s", which robfig/cron clamps up to one second --
+// so a typo silently became a full scan of every container every second, pulling
+// from every registry, forever.
+func TestProcessFlagAliasesRejectsANonPositiveInterval(t *testing.T) {
+	for _, interval := range []string{"0", "-5"} {
+		t.Run(interval, func(t *testing.T) {
+			fatal := false
+			logrus.StandardLogger().ExitFunc = func(int) { fatal = true }
+			defer func() { logrus.StandardLogger().ExitFunc = nil }()
+
+			cmd := new(cobra.Command)
+			RegisterDockerFlags(cmd)
+			RegisterSystemFlags(cmd)
+			require.NoError(t, cmd.ParseFlags([]string{"--interval", interval}))
+
+			ProcessFlagAliases(cmd.PersistentFlags())
+
+			assert.True(t, fatal, "a non-positive interval must be rejected, not clamped to one second")
+		})
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/fugginold/dockwatch/internal/flags"
 	"github.com/fugginold/dockwatch/pkg/container"
 	"github.com/fugginold/dockwatch/pkg/filters"
+	"github.com/fugginold/dockwatch/pkg/registry"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -53,6 +54,10 @@ func PreRun(cmd *cobra.Command, _ []string) {
 	flags.GetSecretsFromFiles(cmd)
 	if err := flags.EnvConfig(cmd); err != nil {
 		log.Fatal(err)
+	}
+	if registry.EnvCredentialsAreUnscoped() {
+		log.Warn("REPO_USER/REPO_PASS are set without REPO_HOST, so they will be offered to " +
+			"every registry hosting a watched image. Set REPO_HOST to restrict them to one registry.")
 	}
 }
 

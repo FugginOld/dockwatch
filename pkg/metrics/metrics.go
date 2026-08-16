@@ -1,12 +1,22 @@
 package metrics
 
 import (
+	"sync"
+
 	"github.com/fugginold/dockwatch/pkg/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var metrics *Metrics
+var (
+	metrics     *Metrics
+	defaultOnce sync.Once
+	// registerer is the collector registry the singleton builds into. It is a
+	// variable so a test can swap in a fresh registry and rebuild from scratch --
+	// without that, the duplicate-registration panic this Once exists to prevent
+	// cannot be reproduced in a test at all.
+	registerer prometheus.Registerer = prometheus.DefaultRegisterer
+)
 
 // Metric is the data points of a single scan
 type Metric struct {
@@ -45,30 +55,36 @@ func (metrics *Metrics) Register(metric *Metric) {
 	metrics.channel <- metric
 }
 
-// Default creates a new metrics handler if none exists, otherwise returns the existing one
+// Default creates a new metrics handler if none exists, otherwise returns the existing one.
+//
+// The cron goroutine and a finishing scan's goroutine both reach this, so a plain
+// nil check let both build the singleton: the second promauto call then panics the
+// daemon with "duplicate metrics collector registration attempted", and two
+// HandleUpdate goroutines end up racing for the same channel.
 func Default() *Metrics {
-	if metrics != nil {
-		return metrics
-	}
+	defaultOnce.Do(buildDefault)
+	return metrics
+}
 
+func buildDefault() {
 	metrics = &Metrics{
-		scanned: promauto.NewGauge(prometheus.GaugeOpts{
+		scanned: promauto.With(registerer).NewGauge(prometheus.GaugeOpts{
 			Name: "dockwatch_containers_scanned",
 			Help: "Number of containers scanned for changes by dockwatch during the last scan",
 		}),
-		updated: promauto.NewGauge(prometheus.GaugeOpts{
+		updated: promauto.With(registerer).NewGauge(prometheus.GaugeOpts{
 			Name: "dockwatch_containers_updated",
 			Help: "Number of containers updated by dockwatch during the last scan",
 		}),
-		failed: promauto.NewGauge(prometheus.GaugeOpts{
+		failed: promauto.With(registerer).NewGauge(prometheus.GaugeOpts{
 			Name: "dockwatch_containers_failed",
 			Help: "Number of containers where update failed during the last scan",
 		}),
-		total: promauto.NewCounter(prometheus.CounterOpts{
+		total: promauto.With(registerer).NewCounter(prometheus.CounterOpts{
 			Name: "dockwatch_scans_total",
 			Help: "Number of scans since the dockwatch started",
 		}),
-		skipped: promauto.NewCounter(prometheus.CounterOpts{
+		skipped: promauto.With(registerer).NewCounter(prometheus.CounterOpts{
 			Name: "dockwatch_scans_skipped",
 			Help: "Number of skipped scans since dockwatch started",
 		}),
@@ -76,8 +92,6 @@ func Default() *Metrics {
 	}
 
 	go metrics.HandleUpdate(metrics.channel)
-
-	return metrics
 }
 
 // RegisterScan fetches a metric handler and enqueues a metric

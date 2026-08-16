@@ -34,7 +34,10 @@ func (m Progress) AddScanned(cont types.Container, newImage types.ImageID) {
 // UpdateFailed updates the containers passed, setting their state as failed with the supplied error
 func (m Progress) UpdateFailed(failures map[types.ContainerID]error) {
 	for id, err := range failures {
-		update := m[id]
+		update, ok := m[id]
+		if !ok {
+			continue
+		}
 		update.error = err
 		update.state = FailedState
 	}
@@ -45,9 +48,17 @@ func (m Progress) Add(update *ContainerStatus) {
 	m[update.containerID] = update
 }
 
-// MarkForUpdate marks the container identified by containerID for update
+// MarkForUpdate marks the container identified by containerID for update.
+//
+// A container already recorded as skipped keeps that state: actions.Update marks
+// every container that is not monitor-only, including ones whose staleness check
+// failed, and those were never established to be up to date.
 func (m Progress) MarkForUpdate(containerID types.ContainerID) {
-	m[containerID].state = UpdatedState
+	update, ok := m[containerID]
+	if !ok || update.state == SkippedState {
+		return
+	}
+	update.state = UpdatedState
 }
 
 // MarkSkipped marks a container that was queued for update as intentionally skipped.

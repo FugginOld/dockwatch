@@ -14,6 +14,7 @@ together see [ARCHITECTURE.md](ARCHITECTURE.md).
 - [Prometheus metrics](#prometheus-metrics)
 - [Lifecycle hooks & restart behavior](#lifecycle-hooks--restart-behavior)
 - [Connecting to a remote Docker host](#connecting-to-a-remote-docker-host)
+- [Private registry credentials](#private-registry-credentials)
 - [Configuration reference](#configuration-reference)
 - [Development](#development)
 
@@ -87,6 +88,18 @@ docker run -d --name dockwatch --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   ghcr.io/fugginold/dockwatch:latest --interval 300
 ```
+
+## Published tags
+
+| Tag | What it is |
+| --- | --- |
+| `latest` | The highest released version. Only a release tag ever moves it. |
+| `1.2.3`, `1.2` | A specific release, and the newest patch of that minor. |
+| `main` | Tip of the `main` branch. Pre-release; use it only to try unreleased fixes. |
+
+`latest` previously also got republished from every commit to `main`, which meant
+unreleased code reached anyone pulling it. It now tracks releases only, and tip of
+main has moved to its own `main` tag.
 
 If you **built from source**, a locally-built image has no registry upstream, so
 Dockwatch cannot self-update it. Pull the latest source and rebuild:
@@ -206,9 +219,18 @@ Endpoints (all require `Authorization: Bearer <token>`):
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/update` | Run a full update scan (or a targeted one, see below) |
-| `GET` | `/v1/schedule` | Return the current cron spec and next run |
-| `POST` | `/v1/schedule?schedule=<cron>` | Set the schedule |
+| `GET` | `/v1/schedule` | Return the current cron spec and next run (needs a schedule, see note) |
+| `POST` | `/v1/schedule?schedule=<cron>` | Set the schedule (same) |
 | `GET` | `/v1/metrics` | Prometheus metrics (requires `--http-api-metrics`) |
+
+`/v1/update` answers `200` when a scan ran and `409` when none was started — because
+one was already running, or because too many were already queued. Any method other
+than `POST` gets `405`.
+
+**`/v1/schedule` only exists when there is a schedule to talk about.** `--http-api-update`
+turns periodic runs off, so unless you also pass `--http-api-periodic-polls` (or set
+`--schedule`), the endpoint is not registered and returns `404`. Dockwatch logs this at
+startup rather than leaving you to guess.
 
 ```bash
 # Full scan
@@ -272,6 +294,44 @@ The equivalent standard Docker environment variables (`DOCKER_HOST`,
 `DOCKER_TLS_VERIFY`, `DOCKER_API_VERSION`) are also honored. Minimum Docker API
 version is `1.25`.
 
+## Private registry credentials
+
+Dockwatch reads credentials from the Docker config file, so the simplest setup is
+to `docker login` on the host and mount the result read-only:
+
+```bash
+docker run -d \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $HOME/.docker/config.json:/config.json:ro \
+  ghcr.io/fugginold/dockwatch
+```
+
+Credentials can also come from the environment:
+
+| Variable | Description |
+|---|---|
+| `REPO_USER` | Registry username |
+| `REPO_PASS` | Registry password or token |
+| `REPO_HOST` | Registry these credentials belong to, e.g. `harbor.example.com` |
+
+**Set `REPO_HOST` whenever you use `REPO_USER`/`REPO_PASS`.** Without it, those
+credentials are offered to whatever registry each watched image lives on — so a
+single image from an untrusted or typosquatted registry is enough to collect
+them. With it, they are only ever sent to the registry you named, and images
+elsewhere fall back to the Docker config. Dockwatch logs a warning at startup if
+the credentials are set without a scope.
+
+`REPO_HOST` accepts the registry as you would write it in an image reference
+(`harbor.example.com`), and for Docker Hub also `docker.io`, `index.docker.io`,
+or the `https://index.docker.io/v1/` key that `docker login` writes into
+`config.json`. Matching is case-insensitive. A port is significant — if your
+images are referenced as `harbor.example.com:5000/...`, include it.
+
+Note that scoping controls which registries dockwatch offers the credentials to.
+The registry still names the token endpoint they are sent to, which is how Docker
+Hub legitimately works (`auth.docker.io` is not `index.docker.io`), so a
+compromised registry you already trust can still redirect them.
+
 ## Configuration reference
 
 Every flag has an environment-variable equivalent, so anything below can be set
@@ -310,7 +370,7 @@ with `-e` on `docker run`. Boolean flags accept `true`/`false`.
 | `--log-format` | `-l` | `DOCKWATCH_LOG_FORMAT` | `Auto` | `Auto`, `LogFmt`, `Pretty`, or `JSON` |
 | `--log-level` | | `DOCKWATCH_LOG_LEVEL` | `info` | `panic`…`trace` |
 | `--debug` | `-d` | `DOCKWATCH_DEBUG` | `false` | Verbose logging |
-| `--trace` | | `DOCKWATCH_TRACE` | `false` | Very verbose logging (exposes credentials) |
+| `--trace` | | `DOCKWATCH_TRACE` | `false` | Very verbose logging. Dumps container and image config including environment variables, so it can expose secrets from any watched container |
 | `--no-color` | | `NO_COLOR` | — | Disable ANSI colors |
 | `--no-startup-message` | | `DOCKWATCH_NO_STARTUP_MESSAGE` | `false` | Suppress the startup message |
 | `--porcelain` | `-P` | `DOCKWATCH_PORCELAIN` | — | Stable machine-readable output (`v1`) |

@@ -21,6 +21,16 @@ type TestData struct {
 	NameOfContainerToKeep   string
 	Containers              []t.Container
 	Staleness               map[string]bool
+	// StalenessError maps a container name to the error its staleness check should
+	// return, for exercising the paths where dockwatch cannot determine staleness.
+	StalenessError map[string]error
+	// StopErrors maps a container name to the error its stop should return, for
+	// exercising how the update flow reacts to a specific stop failure.
+	StopErrors map[string]error
+	// StartedContainers records the name of every container StartContainer was
+	// called for, so a test can assert that a container dockwatch failed to stop
+	// was not started again.
+	StartedContainers []string
 }
 
 // TriedToRemoveImage is a test helper function to check whether RemoveImageByID has been called
@@ -49,14 +59,21 @@ func (client MockClient) ListContainers(_ t.Filter) ([]t.Container, error) {
 
 // StopContainer is a mock method
 func (client MockClient) StopContainer(c t.Container, _ time.Duration) error {
+	if err, ok := client.TestData.StopErrors[c.Name()]; ok {
+		// Wrapped on purpose: production wraps the sentinel with the container name,
+		// so a consumer comparing with == instead of errors.Is would pass here while
+		// failing against the real client.
+		return fmt.Errorf("mock stop failed: %w", err)
+	}
 	if c.Name() == client.TestData.NameOfContainerToKeep {
 		return errors.New("tried to stop the instance we want to keep")
 	}
 	return nil
 }
 
-// StartContainer is a mock method
-func (client MockClient) StartContainer(_ t.Container) (t.ContainerID, error) {
+// StartContainer is a mock method that records which containers were started
+func (client MockClient) StartContainer(c t.Container) (t.ContainerID, error) {
+	client.TestData.StartedContainers = append(client.TestData.StartedContainers, c.Name())
 	return "", nil
 }
 
@@ -90,8 +107,14 @@ func (client MockClient) ExecuteCommand(_ t.ContainerID, command string, _ int) 
 	}
 }
 
-// IsContainerStale is true if not explicitly stated in TestData for the mock client
+// IsContainerStale is true if not explicitly stated in TestData for the mock client.
+// A container named in StalenessError fails its check instead, as it would when the
+// registry is unreachable or the credentials have expired.
 func (client MockClient) IsContainerStale(cont t.Container, params t.UpdateParams) (bool, t.ImageID, error) {
+	if err, found := client.TestData.StalenessError[cont.Name()]; found {
+		return false, "", err
+	}
+
 	stale, found := client.TestData.Staleness[cont.Name()]
 	if !found {
 		stale = true

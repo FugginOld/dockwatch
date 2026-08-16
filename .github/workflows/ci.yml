@@ -24,12 +24,24 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: 1.26.x
+          # go.mod is the single source of truth for the toolchain. Pinned as a
+          # 1.26.x range this silently stayed on a patch release with known called
+          # stdlib advisories while a fixed one was already published.
+          go-version-file: go.mod
           cache: true
       - run: go mod download
       - run: go build ./...
       - run: go test ./...
       - run: go vet ./...
+      # Nothing enforced formatting, so it had drifted across several files unnoticed.
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
 
   vuln:
     name: Vulnerability Scan
@@ -38,7 +50,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: 1.26.x
+          go-version-file: go.mod
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
       - name: Run govulncheck with allowlist policy
@@ -56,6 +68,11 @@ jobs:
           govulncheck ./... > govulncheck.out 2>&1 || SCAN_EXIT=$?
           cat govulncheck.out
 
+          # Scraping IDs is safe at the default scan level: govulncheck only prints
+          # "=== Symbol Results ===" there, so an advisory in a module we require but
+          # never call has no ID in this output to scrape. Adding -show verbose or
+          # -scan module would print Package/Module sections too, and then this would
+          # need to stop at the first such header.
           FOUND_IDS=$(grep -oE 'GO-[0-9]{4}-[0-9]+' govulncheck.out | tr -d '\r' | sort -u || true)
           if [[ -z "$FOUND_IDS" ]]; then
             if [[ "$SCAN_EXIT" -ne 0 ]]; then
@@ -114,9 +131,22 @@ jobs:
           fi
           token=$(curl -sf "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r .token)
           # ponytail: single tags/list page (n=1000); paginate if tag count ever exceeds that.
-          existing=$(curl -sf -H "Authorization: Bearer $token" \
-            "https://ghcr.io/v2/${repo}/tags/list?n=1000" \
-            | jq -r '.tags[]?' | sed -n 's/^v\?\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p')
+          #
+          # This step is now the only rule that sets :latest, so it must neither fail
+          # the release on a transient blip nor quietly claim :latest when it could
+          # not check. A 404 means the package does not exist yet, which is the first
+          # release and genuinely is the highest; anything else stops the publish.
+          code=$(curl -s -o "$RUNNER_TEMP/tags.json" -w '%{http_code}' -H "Authorization: Bearer $token" \
+            "https://ghcr.io/v2/${repo}/tags/list?n=1000")
+          if [ "$code" = "404" ]; then
+            echo "package not published yet; treating $cur as the highest version"
+            existing=""
+          elif [ "$code" != "200" ]; then
+            echo "::error::could not list existing tags (HTTP $code); refusing to guess about :latest"
+            exit 1
+          else
+            existing=$(jq -r '.tags[]?' "$RUNNER_TEMP/tags.json" | sed -n 's/^v\?\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p')
+          fi
           highest=$(printf '%s\n%s\n' "$existing" "$cur" | sort -V | tail -1)
           echo "current=$cur highest=$highest"
           [ "$highest" = "$cur" ] \
@@ -126,10 +156,17 @@ jobs:
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
+          # :latest means the highest released version, and the guard step above is
+          # what decides that -- so it is the only rule allowed to set it. An
+          # is_default_branch rule for :latest as well would republish it from
+          # untagged main on every commit, which is exactly the pre-release code the
+          # guard exists to keep away from everyone pulling :latest. Tip of main
+          # gets its own channel instead: without that nothing would match on a main
+          # push and the tag list would come out empty.
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=main,enable={{is_default_branch}}
             type=raw,value=latest,enable=${{ steps.guard.outputs.is_highest }}
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -140,3 +177,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Without this the Dockerfile's ARG VERSION=dev default stands, so every
+          # released image logged "Dockwatch dev" and sent User-Agent: Dockwatch/dev
+          # to every registry. Tags get the semver; main gets a traceable sha.
+          build-args: |
+            VERSION=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('main-{0}', github.sha) }}

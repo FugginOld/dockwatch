@@ -46,20 +46,31 @@ func ContainsDockwatchLabel(labels map[string]string) bool {
 	return ok && val == "true"
 }
 
+// labels returns the container's labels, or nil if the daemon gave us no info or
+// no config for it. Reads from a nil map are well defined, so putting the guard
+// here fixes every label reader at once -- and a scan reads labels on every
+// container, so a panic here takes the whole daemon down with it.
+func (c Container) labels() map[string]string {
+	if c.containerInfo == nil || c.containerInfo.Config == nil {
+		return nil
+	}
+	return c.containerInfo.Config.Labels
+}
+
 func (c Container) getLabelValueOrEmpty(label string) string {
-	if val, ok := c.containerInfo.Config.Labels[label]; ok {
+	if val, ok := c.labels()[label]; ok {
 		return val
 	}
 	return ""
 }
 
 func (c Container) getLabelValue(label string) (string, bool) {
-	val, ok := c.containerInfo.Config.Labels[label]
+	val, ok := c.labels()[label]
 	return val, ok
 }
 
 func (c Container) getBoolLabelValue(label string) (bool, error) {
-	if strVal, ok := c.containerInfo.Config.Labels[label]; ok {
+	if strVal, ok := c.labels()[label]; ok {
 		value, err := strconv.ParseBool(strVal)
 		return value, err
 	}

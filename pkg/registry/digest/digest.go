@@ -1,6 +1,7 @@
 package digest
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,7 +21,7 @@ import (
 const ContentDigestHeader = "Docker-Content-Digest"
 
 // CompareDigest ...
-func CompareDigest(container types.Container, registryAuth string) (bool, error) {
+func CompareDigest(ctx context.Context, container types.Container, registryAuth string) (bool, error) {
 	if !container.HasImageInfo() {
 		return false, errors.New("container image info missing")
 	}
@@ -28,7 +29,7 @@ func CompareDigest(container types.Container, registryAuth string) (bool, error)
 	var digest string
 
 	registryAuth = TransformAuth(registryAuth)
-	token, err := auth.GetToken(container, registryAuth)
+	token, err := auth.GetToken(ctx, container, registryAuth)
 	if err != nil {
 		return false, err
 	}
@@ -38,7 +39,7 @@ func CompareDigest(container types.Container, registryAuth string) (bool, error)
 		return false, err
 	}
 
-	if digest, err = GetDigest(digestURL, token); err != nil {
+	if digest, err = GetDigest(ctx, digestURL, token); err != nil {
 		return false, err
 	}
 
@@ -64,9 +65,24 @@ func CompareDigest(container types.Container, registryAuth string) (bool, error)
 	return false, nil
 }
 
+// decodeAuth accepts either base64 alphabet.
+//
+// EncodeAuth writes with URLEncoding while this decoded with StdEncoding. The two
+// differ only in the last two characters, so the mismatch stayed invisible until a
+// credential happened to encode a byte as one of them -- and then the decode failed,
+// TransformAuth returned its input untouched, and the registry was handed a
+// base64-of-JSON blob where it expected user:pass. Accepting both means neither a
+// future producer nor a docker config written by another tool can reopen it.
+func decodeAuth(s string) ([]byte, error) {
+	if b, err := base64.URLEncoding.DecodeString(s); err == nil {
+		return b, nil
+	}
+	return base64.StdEncoding.DecodeString(s)
+}
+
 // TransformAuth from a base64 encoded json object to base64 encoded string
 func TransformAuth(registryAuth string) string {
-	b, err := base64.StdEncoding.DecodeString(registryAuth)
+	b, err := decodeAuth(registryAuth)
 	if err != nil {
 		return registryAuth
 	}
@@ -85,23 +101,24 @@ func TransformAuth(registryAuth string) string {
 }
 
 // GetDigest from registry using a HEAD request to prevent rate limiting
-func GetDigest(url string, token string) (string, error) {
+func GetDigest(ctx context.Context, url string, token string) (string, error) {
 	client := helpers.NewHTTPClient()
 
-	req, err := http.NewRequest("HEAD", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("User-Agent", meta.UserAgent)
 
-	if token == "" {
-		return "", errors.New("could not fetch token")
+	// An empty token is legitimate for a registry that serves reads anonymously;
+	// GetToken only returns one when the registry issued no challenge at all.
+	if token != "" {
+		// CREDENTIAL: deliberately not logged. Uncommenting the line below writes a
+		// live secret to the log; do it only against a throwaway credential.
+		// logrus.WithField("token", token).Trace("Setting request token")
+		req.Header.Add("Authorization", token)
 	}
 
-	// CREDENTIAL: Uncomment to log the request token
-	// logrus.WithField("token", token).Trace("Setting request token")
-
-	req.Header.Add("Authorization", token)
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v1+json")
@@ -122,5 +139,14 @@ func GetDigest(url string, token string) (string, error) {
 		}
 		return "", fmt.Errorf("registry responded to head request with %q, auth: %q", res.Status, wwwAuthHeader)
 	}
-	return res.Header.Get(ContentDigestHeader), nil
+
+	// Artifactory and nginx-fronted registries sometimes strip this header on HEAD.
+	// Returning "" as a valid digest made the comparison never match, so every poll
+	// pulled the whole image -- the exact rate-limit consumption the HEAD exists to
+	// avoid -- and logged nothing, because that is the normal "digests differ" path.
+	remoteDigest := res.Header.Get(ContentDigestHeader)
+	if remoteDigest == "" {
+		return "", fmt.Errorf("registry did not return a %s header", ContentDigestHeader)
+	}
+	return remoteDigest, nil
 }

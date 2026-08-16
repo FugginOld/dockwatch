@@ -113,3 +113,39 @@ func TestMetrics_Default_ReturnsSameInstance(t *testing.T) {
 	m2 := metrics.Default()
 	assert.Same(t, m1, m2)
 }
+
+// Default is reached from the cron goroutine and from a finishing scan's goroutine
+// at the same time. Without synchronization both can pass the nil check, and the
+// second promauto.NewGauge hits MustRegister -> "duplicate metrics collector
+// registration attempted", which panics the daemon.
+func TestDefaultIsASingletonUnderConcurrency(t *testing.T) {
+	const goroutines = 50
+
+	// Start from an unbuilt singleton and a fresh registry: another test in this
+	// package has already called Default(), so without this every goroutine below
+	// just gets the existing instance and the race is never exercised.
+	metrics.ResetForTest()
+
+	start := make(chan struct{})
+	got := make(chan *metrics.Metrics, goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					got <- nil
+					t.Errorf("Default panicked: %v", r)
+				}
+			}()
+			<-start
+			got <- metrics.Default()
+		}()
+	}
+	close(start)
+
+	first := <-got
+	for i := 1; i < goroutines; i++ {
+		if m := <-got; m != first {
+			t.Fatalf("Default returned a second instance; the metrics singleton was built twice")
+		}
+	}
+}

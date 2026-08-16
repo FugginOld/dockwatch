@@ -51,8 +51,17 @@ func (ds *dependencySorter) Sort(containers []types.Container) ([]types.Containe
 	ds.marked = map[string]bool{}
 
 	for len(ds.unvisited) > 0 {
-		if err := ds.visit(ds.unvisited[0]); err != nil {
+		head := ds.unvisited[0]
+		if err := ds.visit(head); err != nil {
 			return nil, err
+		}
+		// The loop's only guarantee of progress used to be that removeUnvisited
+		// always deleted something -- including the wrong element when it could not
+		// find the right one. Now that it declines to delete a container it cannot
+		// find, an unremoved head would spin here forever, inside every scan. Fail
+		// the sort instead.
+		if len(ds.unvisited) > 0 && ds.unvisited[0] == head {
+			return nil, fmt.Errorf("dependency sort made no progress on %q", head.Name())
 		}
 	}
 
@@ -96,12 +105,17 @@ func (ds *dependencySorter) findUnvisited(name string) *types.Container {
 }
 
 func (ds *dependencySorter) removeUnvisited(c types.Container) {
-	var idx int
+	idx := -1
 	for i := range ds.unvisited {
 		if ds.unvisited[i].Name() == c.Name() {
 			idx = i
 			break
 		}
+	}
+	// Not found left idx at 0 and deleted the first element instead -- a silently
+	// wrong container dropped from the sort.
+	if idx < 0 {
+		return
 	}
 
 	ds.unvisited = append(ds.unvisited[0:idx], ds.unvisited[idx+1:]...)

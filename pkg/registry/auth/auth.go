@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,9 +10,9 @@ import (
 	"net/url"
 	"strings"
 
+	ref "github.com/distribution/reference"
 	"github.com/fugginold/dockwatch/pkg/registry/helpers"
 	"github.com/fugginold/dockwatch/pkg/types"
-	ref "github.com/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
 
@@ -19,7 +20,7 @@ import (
 const ChallengeHeader = "WWW-Authenticate"
 
 // GetToken fetches a token for the registry hosting the provided image
-func GetToken(container types.Container, registryAuth string) (string, error) {
+func GetToken(ctx context.Context, container types.Container, registryAuth string) (string, error) {
 	normalizedRef, err := ref.ParseNormalizedNamed(container.ImageName())
 	if err != nil {
 		return "", err
@@ -29,7 +30,7 @@ func GetToken(container types.Container, registryAuth string) (string, error) {
 	logrus.WithField("URL", URL.String()).Debug("Built challenge URL")
 
 	var req *http.Request
-	if req, err = GetChallengeRequest(URL); err != nil {
+	if req, err = GetChallengeRequest(ctx, URL); err != nil {
 		return "", err
 	}
 
@@ -46,7 +47,16 @@ func GetToken(container types.Container, registryAuth string) (string, error) {
 		"header": v,
 	}).Debug("Got response to challenge request")
 
-	challenge := strings.ToLower(v)
+	return tokenForChallenge(ctx, v, res.StatusCode, normalizedRef, registryAuth)
+}
+
+// tokenForChallenge decides what Authorization header, if any, the challenge calls
+// for. Split out from GetToken because GetToken can only talk to a real registry
+// host, which leaves this decision untestable.
+func tokenForChallenge(ctx context.Context, header string, status int, imageRef ref.Named, registryAuth string) (string, error) {
+	// Match the scheme case-insensitively but hand the challenge on with its
+	// original case: the realm and service values inside it are case-sensitive.
+	challenge := strings.ToLower(header)
 	if strings.HasPrefix(challenge, "basic") {
 		if registryAuth == "" {
 			return "", fmt.Errorf("no credentials available")
@@ -55,15 +65,23 @@ func GetToken(container types.Container, registryAuth string) (string, error) {
 		return fmt.Sprintf("Basic %s", registryAuth), nil
 	}
 	if strings.HasPrefix(challenge, "bearer") {
-		return GetBearerHeader(challenge, normalizedRef, registryAuth)
+		return GetBearerHeader(ctx, header, imageRef, registryAuth)
+	}
+
+	// No challenge at all means the registry served /v2/ without asking for auth,
+	// so reads are anonymous. Treating that as an unsupported challenge type sent
+	// every poll down the full-pull path instead.
+	if strings.TrimSpace(header) == "" && status >= 200 && status <= 299 {
+		logrus.Debug("Registry issued no challenge; proceeding without a token")
+		return "", nil
 	}
 
 	return "", errors.New("unsupported challenge type from registry")
 }
 
 // GetChallengeRequest creates a request for getting challenge instructions
-func GetChallengeRequest(URL url.URL) (*http.Request, error) {
-	req, err := http.NewRequest("GET", URL.String(), nil)
+func GetChallengeRequest(ctx context.Context, URL url.URL) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", URL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +91,7 @@ func GetChallengeRequest(URL url.URL) (*http.Request, error) {
 }
 
 // GetBearerHeader tries to fetch a bearer token from the registry based on the challenge instructions
-func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) (string, error) {
+func GetBearerHeader(ctx context.Context, challenge string, imageRef ref.Named, registryAuth string) (string, error) {
 	client := helpers.NewHTTPClient()
 	authURL, err := GetAuthURL(challenge, imageRef)
 
@@ -82,13 +100,14 @@ func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) 
 	}
 
 	var r *http.Request
-	if r, err = http.NewRequest("GET", authURL.String(), nil); err != nil {
+	if r, err = http.NewRequestWithContext(ctx, "GET", authURL.String(), nil); err != nil {
 		return "", err
 	}
 
 	if registryAuth != "" {
 		logrus.Debug("Credentials found.")
-		// CREDENTIAL: Uncomment to log registry credentials
+		// CREDENTIAL: deliberately not logged. Uncommenting the line below writes a
+		// live secret to the log; do it only against a throwaway credential.
 		// logrus.Tracef("Credentials: %v", registryAuth)
 		r.Header.Add("Authorization", fmt.Sprintf("Basic %s", registryAuth))
 	} else {
@@ -100,21 +119,55 @@ func GetBearerHeader(challenge string, imageRef ref.Named, registryAuth string) 
 		return "", err
 	}
 
-	body, _ := io.ReadAll(authResponse.Body)
-	tokenResponse := &types.TokenResponse{}
+	return bearerFromResponse(authResponse)
+}
 
-	err = json.Unmarshal(body, tokenResponse)
+// bearerFromResponse turns a token endpoint response into an Authorization header.
+//
+// Every check here was missing: the body was never closed, so the descriptor leaked
+// once per container per poll interval and accumulated for the life of the process;
+// the read error was discarded; and the status was never looked at, so a 401
+// unmarshalled cleanly into an empty TokenResponse and the function returned the
+// literal "Bearer " as a success. The real rejection was swallowed and resurfaced
+// later as a confusing 401 on the digest request.
+func bearerFromResponse(res *http.Response) (string, error) {
+	defer res.Body.Close()
+
+	// Bounded: this read now happens before the status check, so a hostile token
+	// endpoint reaches it on every response. 1 MiB is orders of magnitude more than
+	// any real token document.
+	body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
+		return "", fmt.Errorf("reading token response: %w", err)
+	}
+
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		return "", fmt.Errorf("registry token endpoint responded with %q", res.Status)
+	}
+
+	tokenResponse := &types.TokenResponse{}
+	if err := json.Unmarshal(body, tokenResponse); err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("Bearer %s", tokenResponse.Token), nil
+	token := tokenResponse.Bearer()
+	if token == "" {
+		return "", errors.New("registry token endpoint returned no token")
+	}
+
+	return fmt.Sprintf("Bearer %s", token), nil
 }
 
 // GetAuthURL from the instructions in the challenge
 func GetAuthURL(challenge string, imageRef ref.Named) (*url.URL, error) {
-	loweredChallenge := strings.ToLower(challenge)
-	raw := strings.TrimPrefix(loweredChallenge, "bearer")
+	// Only the scheme name and the parameter keys are case-insensitive; the values
+	// are not. Lowercasing the whole header corrupted case-sensitive Artifactory
+	// realms and services -- docker-Local became docker-local and the token request
+	// 404'd, which showed up only as a full pull on every poll.
+	raw := challenge
+	if len(raw) >= len("bearer") && strings.EqualFold(raw[:len("bearer")], "bearer") {
+		raw = raw[len("bearer"):]
+	}
 
 	pairs := strings.Split(raw, ",")
 	values := make(map[string]string, len(pairs))
@@ -122,7 +175,7 @@ func GetAuthURL(challenge string, imageRef ref.Named) (*url.URL, error) {
 	for _, pair := range pairs {
 		trimmed := strings.Trim(pair, " ")
 		if key, val, ok := strings.Cut(trimmed, "="); ok {
-			values[key] = strings.Trim(val, `"`)
+			values[strings.ToLower(strings.TrimSpace(key))] = strings.Trim(val, ` "`)
 		}
 	}
 	logrus.WithFields(logrus.Fields{
@@ -134,7 +187,18 @@ func GetAuthURL(challenge string, imageRef ref.Named) (*url.URL, error) {
 		return nil, fmt.Errorf("challenge header did not include all values needed to construct an auth url")
 	}
 
-	authURL, _ := url.Parse(values["realm"])
+	authURL, err := url.Parse(values["realm"])
+	if err != nil {
+		return nil, fmt.Errorf("challenge header realm %q is not a valid URL: %w", values["realm"], err)
+	}
+
+	// The registry picks the realm, so it picks where the credentials in the next
+	// request are sent and over what transport. Requiring https with a host means a
+	// registry cannot downgrade us to sending a Basic header in cleartext.
+	if authURL.Scheme != "https" || authURL.Host == "" {
+		return nil, fmt.Errorf("challenge header realm %q must be an https URL with a host", values["realm"])
+	}
+
 	q := authURL.Query()
 	q.Add("service", values["service"])
 

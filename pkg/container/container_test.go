@@ -9,6 +9,38 @@ import (
 )
 
 var _ = Describe("the container", func() {
+	// A container whose info or config the daemon did not return is a state this
+	// package already handles elsewhere (VerifyConfiguration checks for exactly
+	// these), but the label readers dereferenced straight through. Since every scan
+	// reads labels on every container, one such container panicked the whole daemon
+	// and no container got updated after that.
+	Describe("reading labels from a container with missing info", func() {
+		When("the container info is nil", func() {
+			It("should report no labels instead of panicking", func() {
+				c := MockContainer(WithPortBindings())
+				c.containerInfo = nil
+
+				Expect(func() { c.IsDockwatch() }).NotTo(Panic())
+				Expect(c.IsDockwatch()).To(BeFalse())
+				Expect(c.GetLifecyclePostUpdateCommand()).To(BeEmpty())
+				Expect(func() { c.Enabled() }).NotTo(Panic())
+				Expect(func() { c.ImageName() }).NotTo(Panic())
+			})
+		})
+		When("the container config is nil", func() {
+			It("should report no labels instead of panicking", func() {
+				c := MockContainer(WithPortBindings())
+				c.containerInfo.Config = nil
+
+				Expect(func() { c.IsDockwatch() }).NotTo(Panic())
+				Expect(c.IsDockwatch()).To(BeFalse())
+				Expect(c.GetLifecyclePostUpdateCommand()).To(BeEmpty())
+				Expect(func() { c.Enabled() }).NotTo(Panic())
+				Expect(func() { c.ImageName() }).NotTo(Panic())
+			})
+		})
+	})
+
 	Describe("VerifyConfiguration", func() {
 		When("verifying a container with no image info", func() {
 			It("should return an error", func() {
@@ -393,5 +425,19 @@ var _ = Describe("the container", func() {
 			})
 		})
 
+	})
+})
+
+// GetCreateHostConfig runs inside StartContainer, after the old container has been
+// stopped and removed -- so a panic here does not fail a scan, it loses the
+// container. Both index lookups must be guarded, not just the first.
+var _ = Describe("rewriting container links", func() {
+	It("should not panic on a link missing either separator", func() {
+		for _, link := range []string{"db:web", "nosep", "/parent/child:/parent/alias", ":", "/"} {
+			c := MockContainer(WithPortBindings())
+			c.containerInfo.HostConfig.Links = []string{link}
+
+			Expect(func() { c.GetCreateHostConfig() }).NotTo(Panic(), link)
+		}
 	})
 })

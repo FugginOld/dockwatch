@@ -1,7 +1,10 @@
 package helpers
 
 import (
+	"net/http"
+	"net/url"
 	"os"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -55,3 +58,64 @@ var _ = Describe("ShouldSkipRegistryTLSVerify", func() {
 		Expect(ShouldSkipRegistryTLSVerify()).To(BeFalse())
 	})
 })
+
+// Go's stdlib drops the Authorization header across a redirect to a different host,
+// but it compares hosts only -- not schemes. Without a policy of our own, a registry
+// that redirects https -> http on the same host receives the bearer token in
+// cleartext.
+var _ = Describe("the registry HTTP client", func() {
+	It("should refuse a redirect that downgrades https to http", func() {
+		client := NewHTTPClient()
+		Expect(client.CheckRedirect).NotTo(BeNil(), "the client needs a redirect policy")
+
+		from, err := url.Parse("https://registry.example.com/v2/token")
+		Expect(err).NotTo(HaveOccurred())
+		to, err := url.Parse("http://registry.example.com/v2/token")
+		Expect(err).NotTo(HaveOccurred())
+
+		via := []*http.Request{{URL: from}}
+		Expect(client.CheckRedirect(&http.Request{URL: to}, via)).To(HaveOccurred())
+	})
+	It("should refuse a downgrade that happens later in a redirect chain", func() {
+		client := NewHTTPClient()
+
+		first, err := url.Parse("https://registry.example.com/v2/token")
+		Expect(err).NotTo(HaveOccurred())
+		second, err := url.Parse("https://auth.example.com/token")
+		Expect(err).NotTo(HaveOccurred())
+		third, err := url.Parse("http://auth.example.com/token")
+		Expect(err).NotTo(HaveOccurred())
+
+		via := []*http.Request{{URL: first}, {URL: second}}
+		Expect(client.CheckRedirect(&http.Request{URL: third}, via)).To(HaveOccurred())
+	})
+	It("should allow a redirect that stays on https", func() {
+		client := NewHTTPClient()
+
+		from, err := url.Parse("https://registry.example.com/v2/token")
+		Expect(err).NotTo(HaveOccurred())
+		to, err := url.Parse("https://auth.example.com/token")
+		Expect(err).NotTo(HaveOccurred())
+
+		via := []*http.Request{{URL: from}}
+		Expect(client.CheckRedirect(&http.Request{URL: to}, via)).To(Succeed())
+	})
+})
+
+// The dial timeout stops at connect. Without these, a registry that completes the
+// handshake and then never answers parks the update goroutine for good.
+func TestHTTPClientHasRequestTimeouts(t *testing.T) {
+	client := NewHTTPClient()
+
+	if client.Timeout == 0 {
+		t.Error("registry client has no overall request timeout")
+	}
+
+	tr, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("unexpected transport type %T", client.Transport)
+	}
+	if tr.ResponseHeaderTimeout == 0 {
+		t.Error("transport has no ResponseHeaderTimeout; a silent registry parks the scan forever")
+	}
+}

@@ -1,6 +1,8 @@
 package container
 
 import (
+	"errors"
+	"regexp"
 	"time"
 
 	"github.com/docker/docker/api/types/network"
@@ -24,6 +26,7 @@ import (
 
 	"context"
 	"net/http"
+	"strings"
 )
 
 var _ = Describe("the client", func() {
@@ -38,6 +41,49 @@ var _ = Describe("the client", func() {
 	AfterEach(func() {
 		mockServer.Close()
 	})
+	// A removal the daemon accepted but has not finished must be reported as
+	// distinctly "unconfirmed" rather than as a failed stop -- the caller uses that
+	// to decide whether to recreate, and treating it as a failure is what leaves the
+	// container permanently gone once the daemon does finish.
+	Describe("waitForContainerRemoval", func() {
+		It("should report an unconfirmed removal when the budget runs out", func() {
+			// Never answers, so the wait can only end on our own deadline.
+			mockServer.AppendHandlers(func(_ http.ResponseWriter, _ *http.Request) {
+				time.Sleep(2 * time.Second)
+			})
+			client := dockerClient{api: docker}
+
+			err := client.waitForContainerRemoval(MockContainer(WithContainerState(dockercontainer.State{Running: true})), 50*time.Millisecond)
+
+			Expect(errors.Is(err, ErrRemovalUnconfirmed)).To(BeTrue(),
+				"a removal still in flight must not be reported as a failed stop")
+		})
+	})
+
+	// StopContainer must propagate the sentinel, not just any error: the caller uses
+	// errors.Is to decide between recreating and dropping the container, so losing
+	// the %w wrap here silently restores the container-losing behaviour with every
+	// test still green.
+	Describe("StopContainer with a removal that never confirms", func() {
+		It("should report it as an unconfirmed removal", func() {
+			original := containerRemovalTimeout
+			containerRemovalTimeout = 50 * time.Millisecond
+			defer func() { containerRemovalTimeout = original }()
+
+			mockServer.RouteToHandler("DELETE", regexp.MustCompile(`/containers/[^/]+$`),
+				ghttp.RespondWith(http.StatusNoContent, nil))
+			// Accepts the wait but never answers, so only our deadline ends it.
+			mockServer.RouteToHandler("POST", regexp.MustCompile(`/containers/[^/]+/wait$`),
+				func(_ http.ResponseWriter, _ *http.Request) { time.Sleep(2 * time.Second) })
+
+			client := dockerClient{api: docker}
+			err := client.StopContainer(MockContainer(WithContainerState(dockercontainer.State{Running: false})), 0)
+
+			Expect(errors.Is(err, ErrRemovalUnconfirmed)).To(BeTrue(),
+				"the sentinel must survive the wrap, or the caller drops the container")
+		})
+	})
+
 	Describe("WarnOnHeadPullFailed", func() {
 		containerUnknown := MockContainer(WithImageName("unknown.repo/prefix/imagename:latest"))
 		containerKnown := MockContainer(WithImageName("docker.io/prefix/imagename:latest"))
@@ -66,7 +112,57 @@ var _ = Describe("the client", func() {
 			})
 		})
 	})
+	// ImagePull only reports failures that happen before the stream opens. Rate
+	// limits, registry 5xx and layer download failures arrive as error objects
+	// inside the body, so reading the stream without inspecting it reports a
+	// failed pull as a success -- and the container is then recorded as fresh.
+	When("reading the image pull progress stream", func() {
+		It("should return the error the daemon reported in-band", func() {
+			stream := `{"status":"Pulling from library/nginx","id":"latest"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"a2abf6c4d29d"}
+{"errorDetail":{"message":"toomanyrequests: You have reached your pull rate limit."},"error":"toomanyrequests: You have reached your pull rate limit."}`
+
+			err := checkPullResponse(strings.NewReader(stream))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("toomanyrequests"))
+		})
+		// errorDetail is the canonical field. The flat "error" is deprecated since
+		// API v1.4 and documented as omitted in a future release, so relying on it
+		// alone would silently restore the bug on a newer daemon.
+		It("should return the error when only errorDetail is present", func() {
+			stream := `{"status":"Pulling from library/nginx","id":"latest"}
+{"errorDetail":{"message":"toomanyrequests: You have reached your pull rate limit."}}`
+
+			err := checkPullResponse(strings.NewReader(stream))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("toomanyrequests"))
+		})
+		It("should succeed when the stream reports no error", func() {
+			stream := `{"status":"Pulling from library/nginx","id":"latest"}
+{"status":"Digest: sha256:aabbcc"}
+{"status":"Status: Downloaded newer image for nginx:latest"}`
+
+			Expect(checkPullResponse(strings.NewReader(stream))).To(Succeed())
+		})
+		It("should succeed for an empty stream", func() {
+			Expect(checkPullResponse(strings.NewReader(""))).To(Succeed())
+		})
+	})
 	When("pulling the latest image", func() {
+		// Guards the wiring, not just the parsing: without this, reverting PullImage to
+		// drain the stream with io.ReadAll leaves checkPullResponse unused and every
+		// test still green.
+		It("should fail when the daemon reports an error in the progress stream", func() {
+			c := MockContainer(WithImageName(mockServer.Addr() + "/library/nginx:latest"))
+			mockServer.AppendHandlers(mocks.ImagePullHandler(
+				`{"status":"Pulling from library/nginx","id":"latest"}
+{"errorDetail":{"message":"toomanyrequests: You have reached your pull rate limit."},"error":"toomanyrequests: You have reached your pull rate limit."}`))
+
+			err := dockerClient{api: docker}.PullImage(context.Background(), c)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("toomanyrequests"))
+		})
 		When("the image consist of a pinned hash", func() {
 			It("should gracefully fail with a useful message", func() {
 				c := dockerClient{}
@@ -104,6 +200,75 @@ var _ = Describe("the client", func() {
 				)
 
 				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
+			})
+		})
+		// The removal budget is a floor, not a replacement for what the caller asked
+		// for: cleanupExcessDockwatchs deliberately passes 10 minutes.
+		When("deciding how long to wait for a removal", func() {
+			It("should raise a stop timeout that is below the floor", func() {
+				Expect(removalTimeout(3 * time.Second)).To(Equal(containerRemovalTimeout))
+			})
+			It("should honour a caller asking for longer than the floor", func() {
+				Expect(removalTimeout(10 * time.Minute)).To(Equal(10 * time.Minute))
+			})
+		})
+		// --stop-timeout bounds how long we wait for a graceful stop, not how long the
+		// daemon takes to remove the container afterwards. Giving up on the removal
+		// early reports a failed stop, and the caller then never recreates a container
+		// that the daemon goes on to remove a moment later.
+		When("the removal takes longer than the stop timeout", func() {
+			It("should still wait for the removal to complete", func() {
+				container := MockContainer(WithContainerState(dockercontainer.State{Running: true}))
+
+				cid := container.ContainerInfo().ID
+				mockServer.AppendHandlers(
+					mocks.KillContainerHandler(cid, mocks.Found),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
+					mocks.RemoveContainerHandler(cid, mocks.Found),
+					mocks.DelayedWaitContainerHandler(cid, 1500*time.Millisecond), // waitForContainerRemoval
+				)
+
+				Expect(dockerClient{api: docker}.StopContainer(container, 500*time.Millisecond)).To(Succeed())
+			})
+		})
+		// A 409 here means the daemon is already removing the container, which is the
+		// outcome we wanted. Reporting it as a failed stop makes the restart pass skip
+		// a container that is about to disappear -- losing it for good.
+		When("the daemon reports a removal already in progress", func() {
+			It("should wait for that removal rather than failing the stop", func() {
+				container := MockContainer(WithContainerState(dockercontainer.State{Running: true}))
+
+				cid := container.ContainerInfo().ID
+				mockServer.AppendHandlers(
+					mocks.KillContainerHandler(cid, mocks.Found),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
+					mocks.RemoveContainerConflictHandler(cid),
+					mocks.WaitRemovedContainerHandler(cid), // waitForContainerRemoval
+				)
+
+				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
+				Expect(mockServer.ReceivedRequests()).To(HaveLen(4))
+			})
+		})
+		// The daemon removes an AutoRemove container asynchronously after it exits.
+		// Returning as soon as it stops races the recreate against that removal, and
+		// ContainerCreate then fails with a 409 name conflict.
+		When("the container is set to auto-remove", func() {
+			It("should wait for the removal to complete before returning", func() {
+				container := MockContainer(
+					WithContainerState(dockercontainer.State{Running: true}),
+					WithAutoRemove(true),
+				)
+
+				cid := container.ContainerInfo().ID
+				mockServer.AppendHandlers(
+					mocks.KillContainerHandler(cid, mocks.Found),
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerStop
+					mocks.WaitContainerHandler(cid, mocks.Found), // waitForContainerRemoval
+				)
+
+				Expect(dockerClient{api: docker}.StopContainer(container, time.Minute)).To(Succeed())
+				Expect(mockServer.ReceivedRequests()).To(HaveLen(3), "the removal wait must be issued for AutoRemove containers too")
 			})
 		})
 	})

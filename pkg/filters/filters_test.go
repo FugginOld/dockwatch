@@ -215,6 +215,32 @@ func TestFilterByImage(t *testing.T) {
 
 }
 
+// Splitting on the first colon treats the registry port as the tag separator, so
+// every image on a ported registry is truncated to the bare hostname: the filter
+// then never matches the image the operator named, and the truncated value can
+// collide with an unrelated image that happens to be called "registry.local".
+func TestFilterByImageWithARegistryPort(t *testing.T) {
+	filter := FilterByImage([]string{"registry.local:5000/team/app"}, NoFilter)
+
+	container := new(mocks.FilterableContainer)
+	container.On("ImageName").Return("registry.local:5000/team/app:1.2")
+	assert.True(t, filter(container), "an image on a ported registry should match")
+	container.AssertExpectations(t)
+
+	// The bare hostname must not stand in for everything hosted on it.
+	other := new(mocks.FilterableContainer)
+	other.On("ImageName").Return("registry.local:5000/other/app:1.2")
+	assert.False(t, filter(other), "a different repo on the same registry must not match")
+	other.AssertExpectations(t)
+
+	// A digest-pinned ref carries a colon inside the digest, so the tag cannot be
+	// found by scanning for a colon alone.
+	digest := new(mocks.FilterableContainer)
+	digest.On("ImageName").Return("registry.local:5000/team/app@sha256:abc123")
+	assert.True(t, filter(digest), "a digest-pinned image should match its repo")
+	digest.AssertExpectations(t)
+}
+
 func TestBuildFilter(t *testing.T) {
 	names := []string{"test", "valid"}
 
@@ -330,4 +356,30 @@ func TestBuildFilterDisableContainer(t *testing.T) {
 	container.On("Enabled").Return(false, true)
 	assert.False(t, filter(container))
 	container.AssertExpectations(t)
+}
+
+// Name() returns the daemon's container name unguarded, and both filters sliced [1:]
+// to drop the leading "/". A container the daemon reports with an empty name -- a
+// torn-down container, or a non-conformant API like a socket proxy -- panicked the
+// whole scan rather than failing that one container.
+func TestFilterByNameWithAnEmptyContainerName(t *testing.T) {
+	container := new(mocks.FilterableContainer)
+	container.On("Name").Return("")
+
+	filter := FilterByNames([]string{"anything"}, NoFilter)
+	assert.NotPanics(t, func() { filter(container) })
+
+	disabled := new(mocks.FilterableContainer)
+	disabled.On("Name").Return("")
+	disableFilter := FilterByDisableNames([]string{"anything"}, NoFilter)
+	assert.NotPanics(t, func() { disableFilter(disabled) })
+}
+
+// The scope-none branch ended its fragment with a stray quote instead of the ", "
+// separator every other branch uses, so the trailing-separator trim cut the wrong
+// two characters and the startup banner reported a dangling comma.
+func TestBuildFilterDescriptionForScopeNone(t *testing.T) {
+	_, desc := BuildFilter(nil, nil, false, "none")
+
+	assert.Equal(t, "Only checking containers without a scope", desc)
 }

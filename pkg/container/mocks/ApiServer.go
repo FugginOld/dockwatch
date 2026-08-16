@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/onsi/ginkgo"
 
@@ -243,6 +244,33 @@ func WaitContainerHandler(containerID string, found FoundStatus) http.HandlerFun
 	)
 }
 
+// WaitRemovedContainerHandler mocks the POST containers/{id}/wait endpoint, asserting
+// that the caller waited on the removal specifically and not merely on the container
+// stopping.
+func WaitRemovedContainerHandler(containerID string) http.HandlerFunc {
+	return ghttp.CombineHandlers(
+		ghttp.VerifyRequest("POST", O.HaveSuffix("containers/%s/wait", containerID), "condition=removed"),
+		ghttp.RespondWithJSONEncoded(http.StatusOK, map[string]interface{}{"StatusCode": 0}),
+	)
+}
+
+// DelayedWaitContainerHandler mocks the POST containers/{id}/wait endpoint for a removal,
+// responding only after the supplied delay. Used to simulate a removal that takes longer
+// to complete than the caller's stop timeout allows.
+func DelayedWaitContainerHandler(containerID string, delay time.Duration) http.HandlerFunc {
+	return ghttp.CombineHandlers(
+		ghttp.VerifyRequest("POST", O.HaveSuffix("containers/%s/wait", containerID), "condition=removed"),
+		func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-time.After(delay):
+			case <-r.Context().Done():
+				return
+			}
+			ghttp.RespondWithJSONEncoded(http.StatusOK, map[string]interface{}{"StatusCode": 0})(w, r)
+		},
+	)
+}
+
 // RemoveContainerHandler mocks the DELETE containers/{id} endpoint
 func RemoveContainerHandler(containerID string, found FoundStatus) http.HandlerFunc {
 	responseHandler := noContentStatusResponse
@@ -252,6 +280,26 @@ func RemoveContainerHandler(containerID string, found FoundStatus) http.HandlerF
 	return ghttp.CombineHandlers(
 		ghttp.VerifyRequest("DELETE", O.HaveSuffix("containers/%s", containerID)),
 		responseHandler,
+	)
+}
+
+// ImagePullHandler mocks the POST images/create endpoint, returning the supplied
+// newline-delimited JSON progress stream as the daemon would.
+func ImagePullHandler(progressStream string) http.HandlerFunc {
+	return ghttp.CombineHandlers(
+		ghttp.VerifyRequest("POST", O.HaveSuffix("images/create")),
+		ghttp.RespondWith(http.StatusOK, progressStream),
+	)
+}
+
+// RemoveContainerConflictHandler mocks the DELETE containers/{id} endpoint responding
+// with the 409 the daemon returns when a removal of that container is already underway.
+func RemoveContainerConflictHandler(containerID string) http.HandlerFunc {
+	return ghttp.CombineHandlers(
+		ghttp.VerifyRequest("DELETE", O.HaveSuffix("containers/%s", containerID)),
+		ghttp.RespondWithJSONEncoded(http.StatusConflict, struct{ Message string }{
+			Message: "removal of container " + containerID + " is already in progress",
+		}),
 	)
 }
 

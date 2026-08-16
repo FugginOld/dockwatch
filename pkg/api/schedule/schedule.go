@@ -52,20 +52,21 @@ func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 			spec = strings.TrimSpace(r.URL.Query().Get("cron"))
 		}
 		if spec == "" {
-			http.Error(w, `{"error":"missing schedule query parameter"}`, http.StatusBadRequest)
+			writeError(w, "missing schedule query parameter", http.StatusBadRequest)
 			return
 		}
 
 		nextRun, err := handle.setSpecFn(spec)
 		if err != nil {
 			log.WithError(err).Warn("Rejected invalid schedule update")
-			http.Error(w, `{"error":"invalid schedule"}`, http.StatusBadRequest)
+			writeError(w, "invalid schedule", http.StatusBadRequest)
 			return
 		}
 
 		writeResponse(w, response{Schedule: spec, NextRun: nextRun.Format(time.RFC3339)}, http.StatusOK)
 		return
 	default:
+		w.Header().Set("Allow", "GET, POST, PUT")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
@@ -81,6 +82,15 @@ func responseFromFns(getSpecFn func() string, getNextFn func() time.Time) respon
 }
 
 func writeResponse(w http.ResponseWriter, payload response, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// writeError sends a JSON error body. http.Error was being handed JSON but sets
+// Content-Type to text/plain, so every error response announced the wrong type.
+func writeError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

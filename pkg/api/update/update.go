@@ -11,7 +11,7 @@ import (
 // single-flight guard; when false the run is skipped if one is already
 // in progress. The guard itself lives in the Scanner, not this handler.
 type Scanner interface {
-	Scan(images []string, wait bool)
+	Scan(images []string, wait bool) (ran bool)
 }
 
 // New is a factory function creating a new Handler instance.
@@ -31,7 +31,16 @@ type Handler struct {
 // Handle parses the requested images and delegates the guarded scan to the
 // Scanner. A targeted image update waits for the guard; a full scan is
 // skipped when one is already running.
-func (handle *Handler) Handle(_ http.ResponseWriter, r *http.Request) {
+func (handle *Handler) Handle(w http.ResponseWriter, r *http.Request) {
+	// POST is the documented interface, but every verb used to run a scan. That is
+	// more than untidiness: clients and intermediaries treat GET as safe to replay,
+	// so an auto-retried GET turns one timed-out request into repeated full scans.
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	log.Info("Updates triggered by HTTP API request.")
 
 	var images []string
@@ -41,5 +50,18 @@ func (handle *Handler) Handle(_ http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	handle.scanner.Scan(images, len(images) > 0)
+	// 200 was returned whether the scan ran or was dropped, so a caller could not
+	// tell a completed update from one skipped behind another scan or refused by a
+	// full queue.
+	if handle.scanner.Scan(images, len(images) > 0) {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	writeConflict(w)
+}
+
+func writeConflict(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	_, _ = w.Write([]byte("{\"error\":\"a scan is already running or the queue is full; no scan was started\"}\n"))
 }
