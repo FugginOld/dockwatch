@@ -64,7 +64,14 @@ without a live Docker socket or the CLI. Its pieces:
   owns the single-flight guard (`Run` blocks for it, `TryRun` skips if busy,
   `Wait` drains it at shutdown). The scheduler, the shell, and the HTTP update
   handler all funnel through it instead of hand-rolling their own lock.
+  The queue of callers waiting on the guard is bounded: past that, `Run` returns
+  nil rather than waiting, and the HTTP handler answers `409`. Each waiter is a
+  parked goroutine holding a connection that still runs a full scan when its turn
+  comes, so an unbounded queue turns a burst of requests into a backlog of scans
+  outliving the callers that asked for them.
 - **`Controller`** — owns the cron schedule; each tick delegates to the `Runner`.
+  Replacing a schedule stops the old cron before starting the new one, and a spec
+  that fails to parse leaves the running schedule untouched.
 - **`Config`** — the resolved, validated runtime configuration (a plain value,
   no package globals). Legality rules live in `Config.Validate()`.
 - **`RunShell`** — the interactive `dockwatch>` prompt, with injected I/O.
@@ -82,6 +89,18 @@ without a live Docker socket or the CLI. Its pieces:
 
 `--run-once` / `--force-update` short-circuit before any of this: run one scan
 and exit.
+
+Shutdown is ordered, and the order carries the whole point: on a signal the cron
+stops, then the HTTP API shuts down and drains its in-flight requests, and only
+then does the `Runner` wait for the scan still in progress. An API-triggered
+update runs the scan inline in its handler, so closing the API after that wait
+would let a request start a scan the process was about to exit through — the
+same shape of loss as an interrupted stop-and-recreate.
+
+A schedule the operator explicitly enabled and an API that cannot bind are both
+fatal rather than logged: carrying on left dockwatch running with no update
+endpoint while still exiting 0, which reads as healthy to anything watching the
+exit code.
 
 ## The update flow
 

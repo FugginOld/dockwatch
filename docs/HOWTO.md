@@ -339,7 +339,7 @@ with `-e` on `docker run`. Boolean flags accept `true`/`false`.
 
 | Flag | Short | Environment variable | Default | Description |
 |---|---|---|---|---|
-| `--interval` | `-i` | `DOCKWATCH_POLL_INTERVAL` | `86400` | Poll interval, in seconds |
+| `--interval` | `-i` | `DOCKWATCH_POLL_INTERVAL` | `86400` | Poll interval, in seconds. Must be positive; `0` is rejected at startup rather than becoming a one-second poll |
 | `--schedule` | `-s` | `DOCKWATCH_SCHEDULE` | — | Cron expression for updates |
 | `--cron` | | — | — | Alias for `--schedule` |
 | `--run-once` | `-R` | `DOCKWATCH_RUN_ONCE` | `false` | Run once now and exit |

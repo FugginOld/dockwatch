@@ -51,6 +51,12 @@ docker run -d \
 
 Because it runs a published image, dockwatch also keeps **itself** up to date on each run.
 
+**Which tag to use.** `latest` is the highest released version and only ever moves
+on a release tag. `main` tracks the tip of the default branch and is pre-release —
+useful for trying an unreleased fix, not for anything you care about. Pin
+`1.2.3` when you want a specific version. Full table in
+[HOWTO.md](docs/HOWTO.md#published-tags).
+
 ### Build the image from source
 
 To hack on dockwatch, build the image locally instead:
