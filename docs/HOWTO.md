@@ -101,6 +101,49 @@ docker run -d --name dockwatch --restart unless-stopped \
 unreleased code reached anyone pulling it. It now tracks releases only, and tip of
 main has moved to its own `main` tag.
 
+**One-time manual recreate when upgrading from a pre-release image.** Dockwatch
+recognises its own container by a label on it, and it reads that label from the
+*running* container — so a change to the label cannot repair the deployment it
+arrives in. Two such changes landed together, and they fail differently:
+
+- **Built between `e9cc67b` and this fix** — no self-label at all. The daemon
+  does not recognise itself, so on the update that pulls the fix it stops and
+  removes itself like any other stale container and never starts the
+  replacement. Dockwatch disappears.
+- **Built before `e9cc67b`** — labelled `com.centurylinklabs.dockwatch`, the
+  namespace Dockwatch inherited from Watchtower, which it was forked from. That
+  daemon *does* recognise itself, so the self-update works: it renames itself to
+  a random name and starts the replacement alongside. But the new daemon looks
+  for `io.github.fugginold.dockwatch` and so never reaps the renamed old one.
+  You are left with two daemons scanning and recreating the same containers,
+  neither aware of the other's in-flight scans.
+
+Recreate by hand once, and sweep up any daemon left behind:
+
+```bash
+# Docker Compose
+docker compose pull dockwatch
+docker compose up -d --force-recreate dockwatch
+
+# docker run
+docker pull ghcr.io/fugginold/dockwatch:latest
+docker rm -f dockwatch
+docker run -d --name dockwatch --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  ghcr.io/fugginold/dockwatch:latest --interval 300
+
+# Either way: remove any orphaned daemon under a random name
+docker ps -a --filter "label=com.centurylinklabs.dockwatch=true" -q | xargs -r docker rm -f
+```
+
+Self-updates work normally from there.
+
+Container labels you set yourself move to the same namespace, and the old ones
+are no longer read. Rename any you had applied — and do it before the upgrade
+for `.monitor-only` and `.no-pull`, which fail *open*: a container you had held
+back becomes updatable the moment its label stops being recognised. A stale
+`.enable`, `.scope` or `.depends-on` fails closed, so those only stop working.
+
 If you **built from source**, a locally-built image has no registry upstream, so
 Dockwatch cannot self-update it. Pull the latest source and rebuild:
 
@@ -130,6 +173,32 @@ Dockwatch only reads and recreates containers; removing it leaves every watched
 container running and changes nothing else on the host.
 
 ## Running
+
+The `dockwatch ...` commands below are the flags the binary takes. They are not a
+host command: nothing installs `dockwatch` onto the host. Where you run them
+depends on what you are trying to do.
+
+| Goal | How |
+| --- | --- |
+| Configure the daemon | Flags go in `command:` (Compose) or after the image name (`docker run`) |
+| Trigger a scan on the running daemon | `docker attach dockwatch` then `update`, or [`POST /v1/update`](#http-api) |
+| One-shot scan, independent of any daemon | `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/fugginold/dockwatch:latest --run-once` |
+| Read the flag list of the running image | `docker exec dockwatch dockwatch --help` |
+| Local binary | `./dockwatch --run-once` from the build directory |
+
+**Do not `docker exec` a scan into a running daemon.** `docker exec dockwatch
+dockwatch --run-once` starts a second, independent process: it does not see the
+daemon's flags (a daemon set to `--monitor-only`, `--label-enable` or `--scope`
+would be bypassed and every container on the host updated), and it does not share
+the daemon's single-scan guard, so it can stop and recreate the same containers
+the daemon is already recreating. The shell and the HTTP API both reuse the
+daemon's own filter and guard; use those.
+
+The shell only exists when the container has a TTY on both stdin and stdout:
+`tty: true` plus `stdin_open: true` in Compose (both set in the shipped
+`docker-compose.yml`), or `-it` on `docker run`. Without them `docker attach`
+gives you the log stream and nothing else, and the HTTP API is the only guarded
+way in.
 
 By default Dockwatch runs as a daemon and checks every 24 hours. The cadence is
 controlled two ways:
@@ -175,7 +244,7 @@ By default every running container is watched. Narrow it down:
 ```bash
 # Only containers with the enable label set to true
 dockwatch --label-enable
-# label: com.centurylinklabs.dockwatch.enable=true
+# label: io.github.fugginold.dockwatch.enable=true
 
 # Watch only the containers named on the command line
 dockwatch nginx redis
@@ -278,7 +347,7 @@ dockwatch --no-restart
 ```
 
 Container start order respects dependencies declared with the
-`com.centurylinklabs.dockwatch.depends-on` label. `--rolling-restart` cannot be
+`io.github.fugginold.dockwatch.depends-on` label. `--rolling-restart` cannot be
 combined with `--monitor-only`.
 
 ## Connecting to a remote Docker host

@@ -3,6 +3,9 @@ services:
     container_name: dockwatch
     build: .
     restart: unless-stopped
+    # Required for `docker attach dockwatch` to reach the interactive shell.
+    tty: true
+    stdin_open: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: --interval 300

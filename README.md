@@ -80,6 +80,12 @@ docker logs --tail=100 dockwatch
 
 ## Common commands
 
+These are the binary's flags, not host commands. For the daemon's own settings put
+them in `command:`; to trigger a scan on a daemon that is already running, use the
+shell (`docker attach dockwatch`, then `update`) or the HTTP API — not
+`docker exec`, which starts a second process that ignores the daemon's flags. See
+[HOWTO.md](docs/HOWTO.md#running).
+
 ```bash
 # One immediate check, then exit
 dockwatch --run-once
