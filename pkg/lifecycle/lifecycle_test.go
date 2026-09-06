@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	preCheckLabel   = "com.centurylinklabs.dockwatch.lifecycle.pre-check"
-	postCheckLabel  = "com.centurylinklabs.dockwatch.lifecycle.post-check"
-	preUpdateLabel  = "com.centurylinklabs.dockwatch.lifecycle.pre-update"
-	postUpdateLabel = "com.centurylinklabs.dockwatch.lifecycle.post-update"
+	preCheckLabel   = "io.github.fugginold.dockwatch.lifecycle.pre-check"
+	postCheckLabel  = "io.github.fugginold.dockwatch.lifecycle.post-check"
+	preUpdateLabel  = "io.github.fugginold.dockwatch.lifecycle.pre-update"
+	postUpdateLabel = "io.github.fugginold.dockwatch.lifecycle.post-update"
 )
 
 // errorClient is a minimal container.Client that always fails ListContainers.

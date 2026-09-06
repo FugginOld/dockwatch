@@ -106,9 +106,8 @@ func (c Container) SafeImageID() wt.ImageID {
 // container. If the original image was specified without a particular tag, the
 // "latest" tag is assumed.
 func (c Container) ImageName() string {
-	// Compatibility w/ Zodiac deployments
-	imageName, ok := c.getLabelValue(zodiacLabel)
-	if !ok && c.containerInfo != nil && c.containerInfo.Config != nil {
+	var imageName string
+	if c.containerInfo != nil && c.containerInfo.Config != nil {
 		imageName = c.containerInfo.Config.Image
 	}
 
@@ -217,7 +216,7 @@ func (c Container) ToRestart() bool {
 
 // IsDockwatch returns a boolean flag indicating whether or not the current
 // container is the dockwatch container itself. The dockwatch container is
-// identified by the presence of the "com.centurylinklabs.dockwatch" label in
+// identified by the presence of the "io.github.fugginold.dockwatch" label in
 // the container metadata.
 func (c Container) IsDockwatch() bool {
 	return ContainsDockwatchLabel(c.labels())

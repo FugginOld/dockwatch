@@ -35,7 +35,7 @@
     ],
     "OnBuild": null,
     "Labels": {
-      "com.centurylinklabs.dockwatch": "true"
+      "io.github.fugginold.dockwatch": "true"
     }
   },
   "DockerVersion": "18.09.1",
@@ -62,7 +62,7 @@
     ],
     "OnBuild": null,
     "Labels": {
-      "com.centurylinklabs.dockwatch": "true"
+      "io.github.fugginold.dockwatch": "true"
     }
   },
   "Architecture": "amd64",

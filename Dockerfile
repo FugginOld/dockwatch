@@ -22,9 +22,16 @@ FROM alpine:3.23
 
 RUN apk add --no-cache ca-certificates tzdata
 
-COPY --from=builder /dockwatch /dockwatch
+COPY --from=builder /dockwatch /usr/local/bin/dockwatch
+
+# Dockwatch recognises its own container by this label. Without it a self-update
+# stops this container like any other watched one, never starts the replacement,
+# and leaves any renamed old instance unreaped. Dropped once in e9cc67b; there is
+# a test in pkg/container that fails if it goes missing or moves to the builder.
+# Keep the key in sync with dockwatchLabel in pkg/container/metadata.go.
+LABEL io.github.fugginold.dockwatch="true"
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
-  CMD ["/dockwatch", "--health-check"]
+  CMD ["dockwatch", "--health-check"]
 
-ENTRYPOINT ["/dockwatch"]
+ENTRYPOINT ["dockwatch"]

@@ -10,7 +10,7 @@
     "Created": 1554925882,
     "Ports": [],
     "Labels": {
-      "com.centurylinklabs.dockwatch": "true"
+      "io.github.fugginold.dockwatch": "true"
     },
     "State": "exited",
     "Status": "Exited (1) 6 days ago",
@@ -58,7 +58,7 @@
     "Created": 1554925882,
     "Ports": [],
     "Labels": {
-      "com.centurylinklabs.dockwatch": "true"
+      "io.github.fugginold.dockwatch": "true"
     },
     "State": "running",
     "Status": "Up 3 days",

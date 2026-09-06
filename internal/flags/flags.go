@@ -95,7 +95,7 @@ func RegisterSystemFlags(rootCmd *cobra.Command) {
 		"label-enable",
 		"e",
 		envBool("DOCKWATCH_LABEL_ENABLE"),
-		"Watch containers where the com.centurylinklabs.dockwatch.enable label is true")
+		"Watch containers where the io.github.fugginold.dockwatch.enable label is true")
 
 	flags.StringSliceP(
 		"disable-containers",

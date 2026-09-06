@@ -191,8 +191,8 @@ var _ = Describe("the container", func() {
 		var c *Container
 		BeforeEach(func() {
 			c = MockContainer(WithLabels(map[string]string{
-				"com.centurylinklabs.dockwatch.enable": "true",
-				"com.centurylinklabs.dockwatch":        "true",
+				"io.github.fugginold.dockwatch.enable": "true",
+				"io.github.fugginold.dockwatch":        "true",
 			}))
 		})
 		It("should return an empty image ID if image info is missing", func() {
@@ -219,7 +219,7 @@ var _ = Describe("the container", func() {
 			Expect(exists).To(BeTrue())
 		})
 		It("should return false, true if present but not true on calls to .Enabled()", func() {
-			c = MockContainer(WithLabels(map[string]string{"com.centurylinklabs.dockwatch.enable": "false"}))
+			c = MockContainer(WithLabels(map[string]string{"io.github.fugginold.dockwatch.enable": "false"}))
 			enabled, exists := c.Enabled()
 
 			Expect(enabled).To(BeFalse())
@@ -233,7 +233,7 @@ var _ = Describe("the container", func() {
 			Expect(exists).To(BeFalse())
 		})
 		It("should return false, false if present but not parsable .Enabled()", func() {
-			c = MockContainer(WithLabels(map[string]string{"com.centurylinklabs.dockwatch.enable": "falsy"}))
+			c = MockContainer(WithLabels(map[string]string{"io.github.fugginold.dockwatch.enable": "falsy"}))
 			enabled, exists := c.Enabled()
 
 			Expect(enabled).To(BeFalse())
@@ -245,7 +245,7 @@ var _ = Describe("the container", func() {
 				Expect(isDockwatch).To(BeTrue())
 			})
 			It("should return false if the label is present but set to false", func() {
-				c = MockContainer(WithLabels(map[string]string{"com.centurylinklabs.dockwatch": "false"}))
+				c = MockContainer(WithLabels(map[string]string{"io.github.fugginold.dockwatch": "false"}))
 				isDockwatch := c.IsDockwatch()
 				Expect(isDockwatch).To(BeFalse())
 			})
@@ -263,7 +263,7 @@ var _ = Describe("the container", func() {
 		When("fetching the custom stop signal", func() {
 			It("should return the signal if its set", func() {
 				c = MockContainer(WithLabels(map[string]string{
-					"com.centurylinklabs.dockwatch.stop-signal": "SIGKILL",
+					"io.github.fugginold.dockwatch.stop-signal": "SIGKILL",
 				}))
 				stopSignal := c.StopSignal()
 				Expect(stopSignal).To(Equal("SIGKILL"))
@@ -275,15 +275,6 @@ var _ = Describe("the container", func() {
 			})
 		})
 		When("fetching the image name", func() {
-			When("the zodiac label is present", func() {
-				It("should fetch the image name from it", func() {
-					c = MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.zodiac.original-image": "the-original-image",
-					}))
-					imageName := c.ImageName()
-					Expect(imageName).To(Equal(imageName))
-				})
-			})
 			It("should return the image name", func() {
 				name := "image-name:3"
 				c = MockContainer(WithImageName(name))
@@ -302,28 +293,28 @@ var _ = Describe("the container", func() {
 			When("the depends on label is present", func() {
 				It("should fetch depending containers from it", func() {
 					c = MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.depends-on": "postgres",
+						"io.github.fugginold.dockwatch.depends-on": "postgres",
 					}))
 					links := c.Links()
 					Expect(links).To(SatisfyAll(ContainElement("/postgres"), HaveLen(1)))
 				})
 				It("should fetch depending containers if there are many", func() {
 					c = MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.depends-on": "postgres,redis",
+						"io.github.fugginold.dockwatch.depends-on": "postgres,redis",
 					}))
 					links := c.Links()
 					Expect(links).To(SatisfyAll(ContainElement("/postgres"), ContainElement("/redis"), HaveLen(2)))
 				})
 				It("should only add slashes to names when they are missing", func() {
 					c = MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.depends-on": "/postgres,redis",
+						"io.github.fugginold.dockwatch.depends-on": "/postgres,redis",
 					}))
 					links := c.Links()
 					Expect(links).To(SatisfyAll(ContainElement("/postgres"), ContainElement("/redis")))
 				})
 				It("should fetch depending containers if label is blank", func() {
 					c = MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.depends-on": "",
+						"io.github.fugginold.dockwatch.depends-on": "",
 					}))
 					links := c.Links()
 					Expect(links).To(HaveLen(0))
@@ -345,7 +336,7 @@ var _ = Describe("the container", func() {
 			When("no-pull argument is not set", func() {
 				When("no-pull label is true", func() {
 					c := MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.no-pull": "true",
+						"io.github.fugginold.dockwatch.no-pull": "true",
 					}))
 					It("should return true", func() {
 						Expect(c.IsNoPull(types.UpdateParams{})).To(Equal(true))
@@ -353,7 +344,7 @@ var _ = Describe("the container", func() {
 				})
 				When("no-pull label is false", func() {
 					c := MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.no-pull": "false",
+						"io.github.fugginold.dockwatch.no-pull": "false",
 					}))
 					It("should return false", func() {
 						Expect(c.IsNoPull(types.UpdateParams{})).To(Equal(false))
@@ -361,7 +352,7 @@ var _ = Describe("the container", func() {
 				})
 				When("no-pull label is set to an invalid value", func() {
 					c := MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.no-pull": "maybe",
+						"io.github.fugginold.dockwatch.no-pull": "maybe",
 					}))
 					It("should return false", func() {
 						Expect(c.IsNoPull(types.UpdateParams{})).To(Equal(false))
@@ -377,7 +368,7 @@ var _ = Describe("the container", func() {
 			When("no-pull argument is set to true", func() {
 				When("no-pull label is true", func() {
 					c := MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.no-pull": "true",
+						"io.github.fugginold.dockwatch.no-pull": "true",
 					}))
 					It("should return true", func() {
 						Expect(c.IsNoPull(types.UpdateParams{NoPull: true})).To(Equal(true))
@@ -385,7 +376,7 @@ var _ = Describe("the container", func() {
 				})
 				When("no-pull label is false", func() {
 					c := MockContainer(WithLabels(map[string]string{
-						"com.centurylinklabs.dockwatch.no-pull": "false",
+						"io.github.fugginold.dockwatch.no-pull": "false",
 					}))
 					It("should return true", func() {
 						Expect(c.IsNoPull(types.UpdateParams{NoPull: true})).To(Equal(true))
@@ -394,7 +385,7 @@ var _ = Describe("the container", func() {
 				When("label-take-precedence argument is set to true", func() {
 					When("no-pull label is true", func() {
 						c := MockContainer(WithLabels(map[string]string{
-							"com.centurylinklabs.dockwatch.no-pull": "true",
+							"io.github.fugginold.dockwatch.no-pull": "true",
 						}))
 						It("should return true", func() {
 							Expect(c.IsNoPull(types.UpdateParams{LabelPrecedence: true, NoPull: true})).To(Equal(true))
@@ -402,7 +393,7 @@ var _ = Describe("the container", func() {
 					})
 					When("no-pull label is false", func() {
 						c := MockContainer(WithLabels(map[string]string{
-							"com.centurylinklabs.dockwatch.no-pull": "false",
+							"io.github.fugginold.dockwatch.no-pull": "false",
 						}))
 						It("should return false", func() {
 							Expect(c.IsNoPull(types.UpdateParams{LabelPrecedence: true, NoPull: true})).To(Equal(false))
@@ -415,8 +406,8 @@ var _ = Describe("the container", func() {
 		When("there is a pre or post update timeout", func() {
 			It("should return minute values", func() {
 				c = MockContainer(WithLabels(map[string]string{
-					"com.centurylinklabs.dockwatch.lifecycle.pre-update-timeout":  "3",
-					"com.centurylinklabs.dockwatch.lifecycle.post-update-timeout": "5",
+					"io.github.fugginold.dockwatch.lifecycle.pre-update-timeout":  "3",
+					"io.github.fugginold.dockwatch.lifecycle.post-update-timeout": "5",
 				}))
 				preTimeout := c.PreUpdateTimeout()
 				Expect(preTimeout).To(Equal(3))

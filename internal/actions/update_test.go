@@ -195,7 +195,7 @@ var _ = Describe("the update action", func() {
 								time.Now(),
 								&dockerContainer.Config{
 									Labels: map[string]string{
-										"com.centurylinklabs.dockwatch.monitor-only": "true",
+										"io.github.fugginold.dockwatch.monitor-only": "true",
 									},
 								}),
 						},
@@ -248,7 +248,7 @@ var _ = Describe("the update action", func() {
 									time.Now(),
 									&dockerContainer.Config{
 										Labels: map[string]string{
-											"com.centurylinklabs.dockwatch.monitor-only": "false",
+											"io.github.fugginold.dockwatch.monitor-only": "false",
 										},
 									}),
 							},
@@ -274,7 +274,7 @@ var _ = Describe("the update action", func() {
 									time.Now(),
 									&dockerContainer.Config{
 										Labels: map[string]string{
-											"com.centurylinklabs.dockwatch.monitor-only": "true",
+											"io.github.fugginold.dockwatch.monitor-only": "true",
 										},
 									}),
 							},
@@ -326,8 +326,8 @@ var _ = Describe("the update action", func() {
 								time.Now(),
 								&dockerContainer.Config{
 									Labels: map[string]string{
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update-timeout": "190",
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn1.sh",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update-timeout": "190",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn1.sh",
 									},
 									ExposedPorts: map[nat.Port]struct{}{},
 								}),
@@ -359,8 +359,8 @@ var _ = Describe("the update action", func() {
 								time.Now(),
 								&dockerContainer.Config{
 									Labels: map[string]string{
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update-timeout": "190",
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn75.sh",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update-timeout": "190",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn75.sh",
 									},
 									ExposedPorts: map[nat.Port]struct{}{},
 								}),
@@ -391,8 +391,8 @@ var _ = Describe("the update action", func() {
 								time.Now(),
 								&dockerContainer.Config{
 									Labels: map[string]string{
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update-timeout": "190",
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn0.sh",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update-timeout": "190",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn0.sh",
 									},
 									ExposedPorts: map[nat.Port]struct{}{},
 								}),
@@ -433,7 +433,7 @@ var _ = Describe("the update action", func() {
 					time.Now(),
 					&dockerContainer.Config{
 						Labels: map[string]string{
-							"com.centurylinklabs.dockwatch.depends-on": "test-container-provider",
+							"io.github.fugginold.dockwatch.depends-on": "test-container-provider",
 						},
 						ExposedPorts: map[nat.Port]struct{}{},
 					})
@@ -470,8 +470,8 @@ var _ = Describe("the update action", func() {
 								time.Now(),
 								&dockerContainer.Config{
 									Labels: map[string]string{
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update-timeout": "190",
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn1.sh",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update-timeout": "190",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn1.sh",
 									},
 									ExposedPorts: map[nat.Port]struct{}{},
 								}),
@@ -502,8 +502,8 @@ var _ = Describe("the update action", func() {
 								time.Now(),
 								&dockerContainer.Config{
 									Labels: map[string]string{
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update-timeout": "190",
-										"com.centurylinklabs.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn1.sh",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update-timeout": "190",
+										"io.github.fugginold.dockwatch.lifecycle.pre-update":         "/PreUpdateReturn1.sh",
 									},
 									ExposedPorts: map[nat.Port]struct{}{},
 								}),

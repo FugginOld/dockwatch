@@ -3,20 +3,19 @@ package container
 import "strconv"
 
 const (
-	dockwatchLabel         = "com.centurylinklabs.dockwatch"
-	signalLabel            = "com.centurylinklabs.dockwatch.stop-signal"
-	enableLabel            = "com.centurylinklabs.dockwatch.enable"
-	monitorOnlyLabel       = "com.centurylinklabs.dockwatch.monitor-only"
-	noPullLabel            = "com.centurylinklabs.dockwatch.no-pull"
-	dependsOnLabel         = "com.centurylinklabs.dockwatch.depends-on"
-	zodiacLabel            = "com.centurylinklabs.zodiac.original-image"
-	scope                  = "com.centurylinklabs.dockwatch.scope"
-	preCheckLabel          = "com.centurylinklabs.dockwatch.lifecycle.pre-check"
-	postCheckLabel         = "com.centurylinklabs.dockwatch.lifecycle.post-check"
-	preUpdateLabel         = "com.centurylinklabs.dockwatch.lifecycle.pre-update"
-	postUpdateLabel        = "com.centurylinklabs.dockwatch.lifecycle.post-update"
-	preUpdateTimeoutLabel  = "com.centurylinklabs.dockwatch.lifecycle.pre-update-timeout"
-	postUpdateTimeoutLabel = "com.centurylinklabs.dockwatch.lifecycle.post-update-timeout"
+	dockwatchLabel         = "io.github.fugginold.dockwatch"
+	signalLabel            = "io.github.fugginold.dockwatch.stop-signal"
+	enableLabel            = "io.github.fugginold.dockwatch.enable"
+	monitorOnlyLabel       = "io.github.fugginold.dockwatch.monitor-only"
+	noPullLabel            = "io.github.fugginold.dockwatch.no-pull"
+	dependsOnLabel         = "io.github.fugginold.dockwatch.depends-on"
+	scope                  = "io.github.fugginold.dockwatch.scope"
+	preCheckLabel          = "io.github.fugginold.dockwatch.lifecycle.pre-check"
+	postCheckLabel         = "io.github.fugginold.dockwatch.lifecycle.post-check"
+	preUpdateLabel         = "io.github.fugginold.dockwatch.lifecycle.pre-update"
+	postUpdateLabel        = "io.github.fugginold.dockwatch.lifecycle.post-update"
+	preUpdateTimeoutLabel  = "io.github.fugginold.dockwatch.lifecycle.pre-update-timeout"
+	postUpdateTimeoutLabel = "io.github.fugginold.dockwatch.lifecycle.post-update-timeout"
 )
 
 // GetLifecyclePreCheckCommand returns the pre-check command set in the container metadata or an empty string
