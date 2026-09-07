@@ -109,7 +109,13 @@ arrives in. Two such changes landed together, and they fail differently:
 - **Built between `e9cc67b` and this fix** — no self-label at all. The daemon
   does not recognise itself, so on the update that pulls the fix it stops and
   removes itself like any other stale container and never starts the
-  replacement. Dockwatch disappears.
+  replacement. Dockwatch disappears — and it can take other containers with it.
+  Every stale container is stopped before any is recreated, so anything stopped
+  earlier in the same pass is removed and never comes back either. Observed on a
+  live host: an unlabelled daemon removed itself and the two other containers it
+  had judged stale, leaving none of the three. Named volumes survive, and images
+  are kept unless `--cleanup` is set, but a container started with `docker run`
+  and no saved compose file has to be reconstructed by hand.
 - **Built before `e9cc67b`** — labelled `com.centurylinklabs.dockwatch`, the
   namespace Dockwatch inherited from Watchtower, which it was forked from. That
   daemon *does* recognise itself, so the self-update works: it renames itself to
@@ -135,6 +141,11 @@ docker run -d --name dockwatch --restart unless-stopped \
 # Either way: remove any orphaned daemon under a random name
 docker ps -a --filter "label=com.centurylinklabs.dockwatch=true" -q | xargs -r docker rm -f
 ```
+
+Confirm the replacement actually carries the label before letting it scan --
+`docker inspect dockwatch --format '{{index .Config.Labels "io.github.fugginold.dockwatch"}}'`
+must print `true`. Compose adopts an existing container of the same name rather
+than replacing it, so a stale one can survive an upgrade you thought you did.
 
 Self-updates work normally from there.
 
